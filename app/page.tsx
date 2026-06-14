@@ -78,7 +78,7 @@ export default function HomePage() {
         )}
       </div>
 
-      <label className="mt-10 flex cursor-pointer items-center gap-3 rounded-lg border border-gold-400/20 bg-ink-800/50 px-4 py-3 text-sm">
+      <label className="mt-10 flex cursor-pointer items-center gap-3 rounded-lg border border-gold-400/30 bg-ink-800/60 px-4 py-3 text-sm">
         <input
           type="checkbox"
           checked={aiDm}
@@ -86,10 +86,11 @@ export default function HomePage() {
           className="h-4 w-4 accent-gold-400"
         />
         <span className="text-left text-parchment-200/85">
-          <span className="font-display text-gold-400">AI Dungeon Master</span>
+          <span className="font-display text-gold-400">AI Dungeon Master {aiDm ? "· On" : "· Off"}</span>
           <br />
           <span className="text-parchment-300/60">
-            Adds dynamic narration & a chat-the-DM box (needs Workers AI on the deployed site).
+            Generates unique narration for every scene and lets you type any action you
+            imagine — so no two adventures are the same. Turn off for the classic scripted tale.
           </span>
         </span>
       </label>

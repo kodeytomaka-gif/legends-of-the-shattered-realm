@@ -32,16 +32,26 @@ npm run dev        # http://localhost:3000
 Your progress autosaves to `localStorage`. Use **Continue** on the title screen
 to resume.
 
-### The AI Dungeon Master (optional)
+### The AI Dungeon Master (on by default)
 
-Toggle **AI Dungeon Master** on the title screen to enable:
-- dynamic atmospheric narration layered on top of the built-in story, and
-- a "speak to the DM" box for in-fiction questions and roleplay.
+The AI DM makes every playthrough different. When enabled (the default — toggle
+it on the title screen) it provides:
+- **unique narration for every scene**, freshly written each run, and
+- a **free-form action box**: type anything you imagine ("search the ruins for a
+  secret door", "pray to the fractured god", "set a trap and wait") and the DM
+  improvises the outcome.
 
-It calls the `/api/dm` Pages Function, which uses **Cloudflare Workers AI**. If
-the AI binding isn't configured (or you're running a plain static build), the
-game silently falls back to its rich built-in narration — every scene reads well
-without it.
+Crucially, the AI can apply *real consequences* — minor healing or damage, small
+amounts of loot/gold/XP, or a surprise encounter — but every effect is
+re-validated and clamped by the game engine (`applyAiAction` in
+`lib/game/engine.ts`). The model **cannot** grant Shards, hand out endgame gear,
+spawn bosses, exceed safe numeric ranges, teleport you, or end the game. The
+scripted campaign always remains underneath as a guaranteed, completable path.
+
+It calls the `/api/dm` Pages Function, which uses **Cloudflare Workers AI**
+(default model `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, configurable via the
+`DM_MODEL` env var). If the AI binding isn't configured, the game silently falls
+back to its rich built-in narration — every scene still reads well without it.
 
 ---
 

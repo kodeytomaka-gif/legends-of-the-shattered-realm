@@ -13,9 +13,10 @@ import {
   useItemExploring,
   equipItem,
   appendNarration,
+  applyAiAction,
 } from "@/lib/game/engine";
 import { loadGame, saveGame, loadSettings } from "@/lib/game/save";
-import { embellishScene, askDm } from "@/lib/game/dm";
+import { embellishScene, actDm } from "@/lib/game/dm";
 import HeroBar from "@/components/HeroBar";
 import StoryLog from "@/components/StoryLog";
 import CombatPanel from "@/components/CombatPanel";
@@ -28,7 +29,7 @@ export default function PlayPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [aiDm, setAiDm] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [ask, setAsk] = useState("");
+  const [action, setAction] = useState("");
   const lastEmbellished = useRef<string>("");
 
   // Load the saved game once on mount.
@@ -49,14 +50,13 @@ export default function PlayPage() {
     saveGame(next);
   }, []);
 
-  // Optional AI embellishment when entering a new narrative scene.
+  // AI narration each time the hero enters a new scene — unique every playthrough.
   useEffect(() => {
     if (!state || !aiDm) return;
     if (state.phase !== "exploring") return;
-    const scene = getScene(state.sceneId);
-    if (!scene.aiEmbellish) return;
-    if (lastEmbellished.current === state.sceneId) return;
-    lastEmbellished.current = state.sceneId;
+    const key = `${state.sceneId}#${state.character.shards}`;
+    if (lastEmbellished.current === key) return;
+    lastEmbellished.current = key;
 
     let cancelled = false;
     setAiBusy(true);
@@ -89,28 +89,29 @@ export default function PlayPage() {
   const scene = getScene(state.sceneId);
   const choices = state.phase === "exploring" ? scene.choices(state) : [];
 
-  async function submitAsk(e: React.FormEvent) {
+  async function submitAction(e: React.FormEvent) {
     e.preventDefault();
-    if (!state || !ask.trim() || aiBusy) return;
-    const q = ask.trim();
-    setAsk("");
-    // Add the player's question to the log immediately.
+    if (!state || !action.trim() || aiBusy || state.phase !== "exploring") return;
+    const text = action.trim();
+    setAction("");
+    // Echo the player's action immediately.
     setState((cur) => {
       if (!cur) return cur;
       const next: GameState = {
         ...cur,
-        log: [...cur.log, { id: `q_${Date.now()}`, kind: "player", text: `❝ ${q} ❞`, ts: Date.now() }],
+        log: [...cur.log, { id: `act_${Date.now()}`, kind: "player", text: `➤ ${text}`, ts: Date.now() }],
       };
       saveGame(next);
       return next;
     });
     setAiBusy(true);
-    const reply = await askDm(state, q);
+    const result = await actDm(state, text);
     setAiBusy(false);
-    if (reply) {
+    if (result) {
+      // Apply on top of the latest state (which already has the player's line).
       setState((cur) => {
         if (!cur) return cur;
-        const next = appendNarration(cur, reply);
+        const next = applyAiAction(cur, result);
         saveGame(next);
         return next;
       });
@@ -119,7 +120,7 @@ export default function PlayPage() {
         if (!cur) return cur;
         const next: GameState = {
           ...cur,
-          log: [...cur.log, { id: `qn_${Date.now()}`, kind: "system", text: "(The DM is silent — AI narration isn't available on this site.)", ts: Date.now() }],
+          log: [...cur.log, { id: `actn_${Date.now()}`, kind: "system", text: "(The Dungeon Master is silent — AI isn't enabled on this site. Use the choices below to continue.)", ts: Date.now() }],
         };
         saveGame(next);
         return next;
@@ -218,19 +219,25 @@ export default function PlayPage() {
           </div>
         )}
 
-        {/* Ask-the-DM box */}
-        {aiDm && !ended && (
-          <form onSubmit={submitAsk} className="mt-2 flex gap-2">
-            <input
-              className="input"
-              placeholder="Speak to the Dungeon Master… (look around, ask a question)"
-              value={ask}
-              onChange={(e) => setAsk(e.target.value)}
-              disabled={aiBusy}
-            />
-            <button className="ghost-btn shrink-0" disabled={aiBusy || !ask.trim()}>
-              Ask
-            </button>
+        {/* Free-form action box — the AI DM adjudicates what you try */}
+        {aiDm && state.phase === "exploring" && (
+          <form onSubmit={submitAction} className="mt-2">
+            <div className="flex gap-2">
+              <input
+                className="input"
+                placeholder="Or do anything… (search the ruins, pray, set a trap, sweet-talk a guard)"
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+                disabled={aiBusy}
+                maxLength={200}
+              />
+              <button className="gold-btn shrink-0" disabled={aiBusy || !action.trim()}>
+                {aiBusy ? "…" : "Act"}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-parchment-300/40">
+              The Dungeon Master improvises a unique outcome — your story is your own.
+            </p>
           </form>
         )}
       </section>

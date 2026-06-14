@@ -40,13 +40,13 @@ export function hasSave(): boolean {
 }
 
 export function loadSettings(): Settings {
-  if (typeof window === "undefined") return { aiDm: false };
+  if (typeof window === "undefined") return { aiDm: true };
   try {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { aiDm: false };
-    return { aiDm: false, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (!raw) return { aiDm: true };
+    return { aiDm: true, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
-    return { aiDm: false };
+    return { aiDm: true };
   }
 }
 

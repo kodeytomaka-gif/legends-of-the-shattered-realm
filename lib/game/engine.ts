@@ -17,6 +17,8 @@ import {
   playerUseItem,
   playerFlee,
 } from "./combat";
+import type { AiAction, AiEffect } from "./dm";
+import { AI_ITEM_ALLOW, AI_ENEMY_ALLOW } from "./dm";
 
 export const SAVE_VERSION = 1;
 
@@ -218,6 +220,88 @@ export function combatFlee(prev: GameState): GameState {
 export function appendNarration(prev: GameState, text: string): GameState {
   const state = clone(prev);
   addLog(state, "narration", text);
+  return state;
+}
+
+// ── AI free-form action resolution (guardrailed) ──
+
+function clampInt(n: unknown, min: number, max: number): number {
+  const v = Math.round(typeof n === "number" && isFinite(n) ? n : 0);
+  return Math.max(min, Math.min(max, v));
+}
+
+// Apply a DM-adjudicated action. Narration is always shown; each effect is
+// re-validated and clamped here so the model can never break the game (no shards,
+// no teleporting, no game-ending, no out-of-range numbers, no unknown ids).
+export function applyAiAction(prev: GameState, action: AiAction): GameState {
+  const state = clone(prev);
+  if (state.phase !== "exploring") {
+    addLog(state, "narration", action.narration);
+    return state;
+  }
+
+  addLog(state, "narration", action.narration);
+
+  const effects = Array.isArray(action.effects) ? action.effects.slice(0, 3) : [];
+  for (const raw of effects) {
+    const eff = raw as AiEffect;
+    if (!eff || typeof eff.type !== "string") continue;
+
+    if (eff.type === "heal") {
+      const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
+      state.character.hp = Math.min(state.character.maxHp, state.character.hp + amt);
+      addLog(state, "system", `(+${amt} HP)`);
+    } else if (eff.type === "hurt") {
+      const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
+      state.character.hp = Math.max(0, state.character.hp - amt);
+      addLog(state, "combat", `(-${amt} HP)`);
+      if (state.character.hp <= 0) {
+        addLog(state, "system", "Your wounds overcome you...");
+        state.phase = "gameover";
+        return state;
+      }
+    } else if (eff.type === "gold") {
+      const amt = clampInt((eff as { amount?: number }).amount, -15, 15);
+      state.character.gold = Math.max(0, state.character.gold + amt);
+      addLog(state, "loot", amt >= 0 ? `(+${amt} gold)` : `(${amt} gold)`);
+    } else if (eff.type === "xp") {
+      const amt = clampInt((eff as { amount?: number }).amount, 0, 25);
+      if (amt > 0) {
+        const r = grantXp(state.character, amt);
+        addLog(state, "system", `(+${amt} XP)`);
+        if (r.leveled) {
+          addLog(state, "level", `⚜ You reach level ${r.newLevel}! (HP & Weave restored)`);
+          if (r.newAbility) addLog(state, "level", `New ability learned: ${getAbility(r.newAbility).name}.`);
+        }
+      }
+    } else if (eff.type === "item") {
+      const id = (eff as { id?: string }).id ?? "";
+      if ((AI_ITEM_ALLOW as readonly string[]).includes(id)) {
+        addToInventory(state.character.inventory, id, 1);
+        addLog(state, "loot", `Found: ${ITEMS[id].name}.`);
+      }
+    } else if (eff.type === "combat") {
+      const ids = Array.isArray((eff as { enemies?: string[] }).enemies)
+        ? (eff as { enemies: string[] }).enemies
+        : [];
+      const valid = ids.filter((e) => (AI_ENEMY_ALLOW as readonly string[]).includes(e)).slice(0, 2);
+      if (valid.length) {
+        const sc = Math.max(0, state.character.level - 1);
+        state.combat = {
+          enemies: valid.map((id) => spawnEnemy(id, sc)),
+          turn: 0,
+          cooldowns: {},
+          buffs: [],
+          returnSceneId: state.sceneId,
+        };
+        state.phase = "combat";
+        addLog(state, "combat", `⚔ Battle begins — ${state.combat.enemies.map((e) => e.name).join(", ")}.`);
+        return state; // stop processing further effects once a fight starts
+      }
+    }
+    // "none" and anything unrecognized: ignored.
+  }
+
   return state;
 }
 
