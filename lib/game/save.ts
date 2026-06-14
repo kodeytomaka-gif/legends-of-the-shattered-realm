@@ -8,9 +8,12 @@ export interface Settings {
   aiDm: boolean;
   dice: boolean; // tap-to-roll dice animation
   narrate: boolean; // read narration aloud (text-to-speech)
+  sound: boolean; // sound effects
+  music: boolean; // ambient music
+  tableMode: boolean; // bigger, higher-contrast layout for a laptop on the table
 }
 
-const DEFAULT_SETTINGS: Settings = { aiDm: true, dice: true, narrate: false };
+const DEFAULT_SETTINGS: Settings = { aiDm: true, dice: true, narrate: false, sound: true, music: false, tableMode: false };
 
 export function loadGame(): GameState | null {
   if (typeof window === "undefined") return null;

@@ -5,6 +5,7 @@ import type { GameState, RollMeta } from "@/lib/game/types";
 import { getScene } from "@/lib/game/campaigns";
 import { currentAllySeat } from "@/lib/game/combat";
 import { loadSettings, saveSettings } from "@/lib/game/save";
+import { sfx, setSfxEnabled, setMusicEnabled, type Sfx } from "@/lib/game/audio";
 import HeroBar from "@/components/HeroBar";
 import StoryLog from "@/components/StoryLog";
 import CombatPanel from "@/components/CombatPanel";
@@ -17,6 +18,23 @@ function speakable(kind: string): boolean {
 }
 function stripForSpeech(text: string): string {
   return text.replace(/[⚜✦⚔🎲➤★⬇💀🛡⦿]/gu, "").replace(/\s+/g, " ").trim();
+}
+
+// Map a new log entry to a sound effect (best-effort, keyword based).
+function sfxForLog(kind: string, text: string): Sfx | null {
+  if (kind === "level") return "levelup";
+  if (kind === "loot") return "loot";
+  if (kind === "combat") {
+    if (/critical/i.test(text)) return "crit";
+    if (/strikes|hits|drains|damage/i.test(text)) return "hit";
+    if (/misses|glances|turned aside|stumbles/i.test(text)) return "miss";
+    if (/mends|regenerates|drinks/i.test(text)) return "heal";
+  }
+  if (kind === "system") {
+    if (/Victory|whole again|remade|freed every|new management|took the/i.test(text)) return "victory";
+    if (/fallen|Darkness takes|overcome|ends here/i.test(text)) return "defeat";
+  }
+  return null;
 }
 
 export interface GameHandlers {
@@ -54,19 +72,53 @@ export default function GameScreen({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dice, setDice] = useState(true);
   const [narrate, setNarrate] = useState(false);
+  const [sound, setSound] = useState(true);
+  const [music, setMusic] = useState(false);
+  const [tableMode, setTableMode] = useState(false);
   const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null);
 
   const lastRollId = useRef<string | null>(null);
   const [pendingRoll, setPendingRoll] = useState<RollMeta | null>(null);
   const spoken = useRef<Set<string>>(new Set());
   const narratePrimed = useRef(false);
+  const lastSfxId = useRef<string | null>(null);
+  const campaignId = state.campaignId;
 
-  // Load dice/narrate preferences once.
+  // Load preferences once; start audio per settings.
   useEffect(() => {
     const s = loadSettings();
     setDice(s.dice);
     setNarrate(s.narrate);
-  }, []);
+    setSound(s.sound);
+    setMusic(s.music);
+    setTableMode(s.tableMode);
+    setSfxEnabled(s.sound);
+    if (s.music) setMusicEnabled(true, campaignId);
+    return () => setMusicEnabled(false);
+  }, [campaignId]);
+
+  // Apply table mode to the document root.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("table-mode", tableMode);
+    return () => document.documentElement.classList.remove("table-mode");
+  }, [tableMode]);
+
+  // Play a sound effect for newly-added log lines.
+  useEffect(() => {
+    if (!sound) return;
+    const last = state.log[state.log.length - 1];
+    if (!last) return;
+    if (lastSfxId.current === null) {
+      lastSfxId.current = last.id;
+      return;
+    }
+    if (last.id !== lastSfxId.current) {
+      lastSfxId.current = last.id;
+      const s = sfxForLog(last.kind, last.text);
+      if (s) sfx(s);
+    }
+  }, [state.log, sound]);
 
   // Surface a tap-to-roll animation when a new skill-check roll appears.
   useEffect(() => {
@@ -123,6 +175,28 @@ export default function GameScreen({
     if (!v && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     if (v) narratePrimed.current = false; // re-prime so we don't dump backlog
     saveSettings({ ...loadSettings(), narrate: v });
+  }
+  function toggleSound() {
+    const v = !sound;
+    setSound(v);
+    setSfxEnabled(v);
+    saveSettings({ ...loadSettings(), sound: v });
+  }
+  function toggleMusic() {
+    const v = !music;
+    setMusic(v);
+    setMusicEnabled(v, campaignId);
+    saveSettings({ ...loadSettings(), music: v });
+  }
+  function toggleTableMode() {
+    const v = !tableMode;
+    setTableMode(v);
+    saveSettings({ ...loadSettings(), tableMode: v });
+  }
+  function toggleFullscreen() {
+    if (typeof document === "undefined") return;
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
   }
 
   const scene = getScene(state.sceneId);
@@ -191,11 +265,24 @@ export default function GameScreen({
               <span>🎲 Dice animation</span>
               <input type="checkbox" checked={dice} onChange={toggleDice} className="h-4 w-4 accent-gold-400" />
             </label>
-            <label className="flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
-              <span>🔊 Read aloud</span>
+            <label className="mb-2 flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>🗣 Read aloud</span>
               <input type="checkbox" checked={narrate} onChange={toggleNarrate} className="h-4 w-4 accent-gold-400" />
             </label>
-            <p className="mt-2 text-[11px] text-parchment-300/50">Read-aloud uses your device&apos;s voice.</p>
+            <label className="mb-2 flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>🔊 Sound effects</span>
+              <input type="checkbox" checked={sound} onChange={toggleSound} className="h-4 w-4 accent-gold-400" />
+            </label>
+            <label className="mb-2 flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>🎵 Music</span>
+              <input type="checkbox" checked={music} onChange={toggleMusic} className="h-4 w-4 accent-gold-400" />
+            </label>
+            <label className="mb-2 flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>📺 Table mode</span>
+              <input type="checkbox" checked={tableMode} onChange={toggleTableMode} className="h-4 w-4 accent-gold-400" />
+            </label>
+            <button onClick={toggleFullscreen} className="ghost-btn w-full !py-1 text-xs">⛶ Toggle fullscreen</button>
+            <p className="mt-2 text-[11px] text-parchment-300/50">Read-aloud &amp; sound use your device.</p>
           </div>
         )}
       </div>

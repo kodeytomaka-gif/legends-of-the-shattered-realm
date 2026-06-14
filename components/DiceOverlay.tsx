@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RollMeta } from "@/lib/game/types";
+import { sfx } from "@/lib/game/audio";
 
 export default function DiceOverlay({ roll, onDone }: { roll: RollMeta; onDone: () => void }) {
   const [phase, setPhase] = useState<"ready" | "rolling" | "done">("ready");
@@ -15,6 +16,7 @@ export default function DiceOverlay({ roll, onDone }: { roll: RollMeta; onDone: 
   function rollDie() {
     if (phase !== "ready") return;
     setPhase("rolling");
+    sfx("dice");
     let ticks = 0;
     const spin = setInterval(() => {
       setFace(1 + Math.floor(Math.random() * 20));
@@ -22,6 +24,7 @@ export default function DiceOverlay({ roll, onDone }: { roll: RollMeta; onDone: 
       if (ticks > 14) {
         clearInterval(spin);
         setFace(roll.d20);
+        sfx("diceland");
         setPhase("done");
         timers.current.push(setTimeout(onDone, 1700));
       }

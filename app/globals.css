@@ -38,6 +38,22 @@
   }
 }
 
+/* Table mode: bigger text + higher contrast for a laptop across the room. */
+html.table-mode {
+  font-size: 19px;
+}
+html.table-mode body {
+  background-color: #000;
+}
+html.table-mode .rune-card,
+html.table-mode .rune-panel {
+  border-color: rgba(212, 175, 55, 0.5);
+  background-color: rgba(20, 17, 11, 0.92);
+}
+html.table-mode .choice-btn {
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
 @keyframes ember-rise {
   0% { transform: translateY(0) translateX(0); opacity: 0; }
   10% { opacity: 0.9; }

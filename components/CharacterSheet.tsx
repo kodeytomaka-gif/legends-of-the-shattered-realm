@@ -20,6 +20,7 @@ import {
 } from "@/lib/game/character";
 import { RARITY } from "@/lib/game/loot";
 import ItemCard from "@/components/ItemCard";
+import Portrait from "@/components/Portrait";
 
 const SLOT_LABELS: { slot: EquipSlot; label: string }[] = [
   { slot: "weapon", label: "Weapon" },
@@ -95,10 +96,15 @@ export default function CharacterSheet({
           </div>
         )}
 
-        <p className="font-display text-parchment-100">{c.name}</p>
-        <p className="text-sm text-parchment-300/70">
-          Level {c.level} {RACES[c.race].name} {CLASSES[c.klass].name}{sub ? ` · ${sub.name}` : ""}
-        </p>
+        <div className="flex items-center gap-3">
+          <Portrait race={c.race} klass={c.klass} size={44} dimmed={c.hp <= 0} />
+          <div>
+            <p className="font-display text-parchment-100">{c.name}</p>
+            <p className="text-sm text-parchment-300/70">
+              Level {c.level} {RACES[c.race].name} {CLASSES[c.klass].name}{sub ? ` · ${sub.name}` : ""}
+            </p>
+          </div>
+        </div>
         <p className="mt-1 text-xs text-ember-400/80">
           HP {Math.max(0, c.hp)}/{effectiveMaxHp(c, gear)} · Weave {c.mp}/{effectiveMaxMp(c, gear)} · 🛡 AC {armorClass(c, gear)} · ⚔ {modString(attackBonus(c, gear))}
         </p>

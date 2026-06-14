@@ -3,6 +3,7 @@
 import type { GameState, Character, ItemInstance } from "@/lib/game/types";
 import { CLASSES } from "@/lib/game/content";
 import { armorClass, effectiveMaxHp, effectiveMaxMp } from "@/lib/game/character";
+import Portrait from "@/components/Portrait";
 
 function MiniBar({ value, max, className }: { value: number; max: number; className: string }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
@@ -26,17 +27,22 @@ function HeroCard({ c, gear, active, downed }: { c: Character; gear: ItemInstanc
             : "border-gold-400/20 bg-ink-900/50"
       }`}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-display text-sm text-parchment-100">
-          {active && "▸ "}
-          {c.name}
-          {downed && " 💀"}
-        </span>
-        <span className="shrink-0 text-[10px] text-parchment-300/60">
-          Lv{c.level} {CLASSES[c.klass].name} · 🛡{armorClass(c, gear)}
-        </span>
+      <div className="flex items-center gap-2">
+        <Portrait race={c.race} klass={c.klass} size={30} active={active} dimmed={downed} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate font-display text-sm text-parchment-100">
+              {active && "▸ "}
+              {c.name}
+              {downed && " 💀"}
+            </span>
+            <span className="shrink-0 text-[10px] text-parchment-300/60">
+              Lv{c.level} · 🛡{armorClass(c, gear)}
+            </span>
+          </div>
+        </div>
       </div>
-      <div className="mt-1 space-y-1">
+      <div className="mt-1.5 space-y-1">
         <div className="flex items-center gap-1.5">
           <span className="w-7 shrink-0 text-[10px] text-ember-400/80">{Math.max(0, c.hp)}</span>
           <MiniBar value={c.hp} max={maxHp} className="bg-gradient-to-r from-ember-500 to-ember-400" />

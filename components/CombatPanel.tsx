@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { GameState } from "@/lib/game/types";
 import { ABILITIES, ITEMS, getItem } from "@/lib/game/content";
 import { currentAllySeat } from "@/lib/game/combat";
+import { enemyGlyph } from "@/lib/game/art";
+import { EnemyArt } from "@/components/Portrait";
 
 const STATUS_ICON: Record<string, string> = {
   poison: "☠", burn: "🔥", bleed: "🩸", stun: "💫", regen: "✚", defend: "🛡",
@@ -93,7 +95,8 @@ export default function CombatPanel({
               }`}
             >
               <div className="flex items-center justify-between text-sm">
-                <span className="font-display text-parchment-100">
+                <span className="flex items-center gap-2 font-display text-parchment-100">
+                  <EnemyArt glyph={enemyGlyph(e.id)} size={24} />
                   {selected && !dead ? "🎯 " : ""}
                   {e.name} {dead && "(slain)"}
                   {(e.statuses ?? []).filter((s) => s.turns > 0).map((s) => (
