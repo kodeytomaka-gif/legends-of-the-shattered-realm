@@ -25,6 +25,7 @@ export interface GameHandlers {
   onAbility: (id: string, target: number) => void;
   onItem: (id: string) => void;
   onFlee: () => void;
+  onDefend: () => void;
   onUsePotion: (itemId: string, seat: number) => void;
   onEquip: (itemId: string, seat: number) => void;
   onAct?: (text: string) => void; // free-form AI action
@@ -237,6 +238,7 @@ export default function GameScreen({
             onAbility={handlers.onAbility}
             onItem={handlers.onItem}
             onFlee={handlers.onFlee}
+            onDefend={handlers.onDefend}
           />
         )}
 

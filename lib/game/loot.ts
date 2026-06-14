@@ -54,6 +54,7 @@ export interface PerkDef {
 
 export const PERKS: Record<string, PerkDef> = {
   vampiric: { id: "vampiric", name: "Vampiric", desc: "Heal for 20% of weapon damage dealt." },
+  flaming: { id: "flaming", name: "Flaming", desc: "Weapon hits set the target alight (burn)." },
   keen: { id: "keen", name: "Keen", desc: "Weapon attacks crit on 19-20." },
   brutal: { id: "brutal", name: "Brutal", desc: "+2 weapon damage." },
   guardian: { id: "guardian", name: "Guardian", desc: "+1 Armor Class." },

@@ -35,6 +35,7 @@ export type GameAction =
   | { kind: "ability"; id: string; target: number }
   | { kind: "item"; id: string }
   | { kind: "flee" }
+  | { kind: "defend" }
   | { kind: "useItem"; itemId: string; seat: number }
   | { kind: "equip"; uid: string; seat: number };
 

@@ -1,4 +1,4 @@
-import type { GameState, Enemy, Character } from "./types";
+import type { GameState, Enemy, Character, StatusEffect, EnemyAbility } from "./types";
 import { addLog } from "./util";
 import {
   armorClass,
@@ -31,14 +31,44 @@ function livingAllySeats(state: GameState): number[] {
   return state.party.map((c, i) => (c.hp > 0 ? i : -1)).filter((i) => i >= 0);
 }
 
-// Seat of the hero whose turn it is in the player phase, or -1 if the phase is over.
+// Seat of the hero whose turn it is in the player phase, or -1 if the phase is
+// over. Stunned heroes are skipped for the round.
 export function currentAllySeat(state: GameState): number {
   if (!state.combat) return -1;
   for (let i = 0; i < state.party.length; i++) {
-    if (state.party[i].hp > 0 && !state.combat.acted.includes(i)) return i;
+    if (state.party[i].hp > 0 && !state.combat.acted.includes(i) && !allyStunned(state, i)) return i;
   }
   return -1;
 }
+
+// ── Status effect helpers ──
+
+function allyStatusList(state: GameState, seat: number): StatusEffect[] {
+  if (!state.combat) return [];
+  return (state.combat.statuses[seat] ??= []);
+}
+function allyStunned(state: GameState, seat: number): boolean {
+  return allyStatusList(state, seat).some((s) => s.type === "stun" && s.turns > 0);
+}
+function allyDefending(state: GameState, seat: number): boolean {
+  return allyStatusList(state, seat).some((s) => s.type === "defend" && s.turns > 0);
+}
+function enemyStunned(e: Enemy): boolean {
+  return (e.statuses ?? []).some((s) => s.type === "stun" && s.turns > 0);
+}
+// Add/refresh a status on a list (same-type effects refresh rather than stack).
+function applyStatus(list: StatusEffect[], eff: StatusEffect): void {
+  const existing = list.find((s) => s.type === eff.type);
+  if (existing) {
+    existing.turns = Math.max(existing.turns, eff.turns);
+    existing.magnitude = Math.max(existing.magnitude, eff.magnitude);
+  } else {
+    list.push({ ...eff });
+  }
+}
+const STATUS_LABEL: Record<string, string> = {
+  poison: "poison", burn: "burns", bleed: "bleeds", stun: "is stunned", regen: "regenerates", defend: "braces",
+};
 
 function resolveTarget(state: GameState, idx: number): number {
   if (!state.combat) return -1;
@@ -58,7 +88,8 @@ function raceArmorBonus(char: Character): number {
 
 function effectiveAc(state: GameState, seat: number): number {
   const c = state.party[seat];
-  return armorClass(c, state.gear) + buffValue(state, seat, "ac") + raceArmorBonus(c);
+  const defend = allyDefending(state, seat) ? 4 : 0;
+  return armorClass(c, state.gear) + buffValue(state, seat, "ac") + raceArmorBonus(c) + defend;
 }
 
 function who(state: GameState, seat: number): string {
@@ -112,6 +143,11 @@ export function playerAttack(state: GameState, targetIdx: number): void {
       char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + drain);
       addLog(state, "combat", `${name}'s vampiric weapon drinks ${drain} HP.`);
     }
+    if (perks.includes("flaming") && enemy.hp > 0) {
+      enemy.statuses ??= [];
+      applyStatus(enemy.statuses, { type: "burn", turns: 2, magnitude: 3 });
+      addLog(state, "combat", `The ${enemy.name} is set alight!`);
+    }
   } else {
     addLog(state, "combat", `${name}'s blow glances off the ${enemy.name}. (${total} vs AC ${enemy.ac})`);
   }
@@ -144,9 +180,25 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
   const scaleMod = ability.scalesWith ? Math.max(0, abilityMod(char.abilities[ability.scalesWith])) : 0;
   const eff = ability.effect;
 
+  // Heal/revive can target self or a chosen ally seat (targetIdx).
+  const allySeat = ability.target === "ally" ? targetIdx : seat;
+
   if (eff.type === "heal") {
-    char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + eff.amount);
-    addLog(state, "combat", `${ability.name} mends ${name} for ${eff.amount} HP.`);
+    const t = state.party[allySeat] ?? char;
+    t.hp = Math.min(effectiveMaxHp(t, state.gear), t.hp + eff.amount);
+    addLog(state, "combat", `${ability.name} mends ${who(state, allySeat)} for ${eff.amount} HP.`);
+  } else if (eff.type === "revive") {
+    const t = state.party[allySeat];
+    if (!t || t.hp > 0) {
+      addLog(state, "system", `${ability.name} needs a fallen ally to target.`);
+      // Refund the cast — nothing to revive.
+      char.mp += ability.mpCost;
+      cds[abilityId] = 0;
+      return false;
+    }
+    t.downed = false;
+    t.hp = Math.min(effectiveMaxHp(t, state.gear), eff.amount);
+    addLog(state, "level", `✦ ${name} raises ${who(state, allySeat)} from the brink! (${t.hp} HP)`);
   } else if (eff.type === "buff") {
     (state.combat.buffs[seat] ??= []).push({ stat: eff.stat, amount: eff.amount, turns: eff.turns + 1 });
     addLog(state, "combat", `${name} uses ${ability.name} — ${eff.stat === "ac" ? "armor" : "attack"} +${eff.amount}.`);
@@ -157,6 +209,11 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
       const dmg = rollDice(eff.dice[0], eff.dice[1]) + scaleMod;
       t.hp = Math.max(0, t.hp - dmg);
       addLog(state, "combat", `${name}'s ${ability.name} hits the ${t.name} for ${dmg}${eff.element ? ` ${eff.element}` : ""} damage.`);
+      if (eff.applies && t.hp > 0) {
+        t.statuses ??= [];
+        applyStatus(t.statuses, eff.applies);
+        addLog(state, "combat", `The ${t.name} ${STATUS_LABEL[eff.applies.type] ?? eff.applies.type}!`);
+      }
     }
   } else if (eff.type === "drain") {
     const di = resolveTarget(state, targetIdx);
@@ -181,6 +238,22 @@ export function playerUseItem(state: GameState, itemId: string): boolean {
   const char = state.party[seat];
   const name = who(state, seat);
 
+  // Revivify Salts: bring back the first downed ally instead of healing.
+  if (itemId === "revive_kit") {
+    const downed = state.party.findIndex((c) => c.hp <= 0);
+    if (downed < 0) {
+      addLog(state, "system", "No fallen ally to revive.");
+      return false;
+    }
+    const t = state.party[downed];
+    t.downed = false;
+    t.hp = Math.max(1, Math.round(effectiveMaxHp(t, state.gear) * 0.25));
+    removeFromInventory(state.inventory, itemId, 1);
+    addLog(state, "level", `✦ ${name} uses ${item.name} — ${who(state, downed)} staggers back up! (${t.hp} HP)`);
+    afterAllyAction(state, seat);
+    return true;
+  }
+
   if (item.heal) {
     char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + item.heal);
     addLog(state, "combat", `${name} drinks the ${item.name} (+${item.heal} HP).`);
@@ -191,6 +264,16 @@ export function playerUseItem(state: GameState, itemId: string): boolean {
   }
   removeFromInventory(state.inventory, itemId, 1);
 
+  afterAllyAction(state, seat);
+  return true;
+}
+
+export function playerDefend(state: GameState): boolean {
+  if (!state.combat) return false;
+  const seat = currentAllySeat(state);
+  if (seat < 0) return false;
+  applyStatus(allyStatusList(state, seat), { type: "defend", turns: 2, magnitude: 0 });
+  addLog(state, "combat", `${who(state, seat)} braces — raising guard (+4 AC, halved damage).`);
   afterAllyAction(state, seat);
   return true;
 }
@@ -237,13 +320,92 @@ function afterAllyAction(state: GameState, seat: number): void {
   }
 }
 
+// Deal damage to a hero, applying Defend mitigation and knockout.
+function damageAlly(state: GameState, seat: number, raw: number): number {
+  const t = state.party[seat];
+  let dmg = raw;
+  if (allyDefending(state, seat)) dmg = Math.ceil(dmg / 2);
+  t.hp = Math.max(0, t.hp - dmg);
+  if (t.hp <= 0 && !t.downed) {
+    t.downed = true;
+    addLog(state, "combat", `${who(state, seat)} is knocked out!`);
+  }
+  return dmg;
+}
+
+// Damage-over-time on enemies; returns true if it wiped them out.
+function tickEnemyStatuses(state: GameState): boolean {
+  if (!state.combat) return false;
+  for (const e of state.combat.enemies) {
+    if (e.hp <= 0 || !e.statuses) continue;
+    for (const s of e.statuses) {
+      if (s.turns > 0 && (s.type === "poison" || s.type === "burn" || s.type === "bleed")) {
+        e.hp = Math.max(0, e.hp - s.magnitude);
+        addLog(state, "combat", `The ${e.name} takes ${s.magnitude} ${s.type} damage.`);
+      }
+    }
+    e.statuses = e.statuses.map((s) => ({ ...s, turns: s.turns - 1 })).filter((s) => s.turns > 0);
+  }
+  return aliveEnemies(state).length === 0;
+}
+
+// Try to use one of an enemy's special abilities; returns true if it acted.
+function tryEnemyAbility(state: GameState, enemy: Enemy): boolean {
+  if (!enemy.abilities) return false;
+  for (const ab of enemy.abilities) {
+    if (!chance(ab.chance)) continue;
+    if (ab.kind === "heal") {
+      enemy.hp = Math.min(enemy.maxHp, enemy.hp + ab.amount);
+      addLog(state, "combat", `The ${enemy.name} uses ${ab.name}, mending ${ab.amount} HP.`);
+      return true;
+    }
+    if (ab.kind === "aoe") {
+      addLog(state, "combat", `The ${enemy.name} uses ${ab.name} — it strikes the whole party!`);
+      for (const seat of livingAllySeats(state)) {
+        const dmg = damageAlly(state, seat, rollDice(ab.dice[0], ab.dice[1]) + ab.bonus);
+        addLog(state, "combat", `${who(state, seat)} takes ${dmg} damage.`);
+      }
+      return true;
+    }
+    if (ab.kind === "heavy") {
+      const seat = pick(livingAllySeats(state));
+      const dmg = damageAlly(state, seat, rollDice(ab.dice[0], ab.dice[1]) + ab.bonus);
+      addLog(state, "combat", `The ${enemy.name} uses ${ab.name} on ${who(state, seat)} for ${dmg} damage!`);
+      if (ab.lifesteal) {
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(dmg / 2));
+        addLog(state, "combat", `The ${enemy.name} drains the life, healing ${Math.floor(dmg / 2)}.`);
+      }
+      return true;
+    }
+    if (ab.kind === "status") {
+      const seat = pick(livingAllySeats(state));
+      applyStatus(allyStatusList(state, seat), { type: ab.status, turns: ab.turns, magnitude: ab.magnitude });
+      addLog(state, "combat", `The ${enemy.name} uses ${ab.name} — ${who(state, seat)} ${STATUS_LABEL[ab.status] ?? ab.status}!`);
+      return true;
+    }
+  }
+  return false;
+}
+
 function enemyPhase(state: GameState): void {
   if (!state.combat) return;
+  // Damage-over-time ticks on enemies before they act.
+  if (tickEnemyStatuses(state)) {
+    winCombat(state);
+    return;
+  }
+
   for (const enemy of aliveEnemies(state)) {
     const seats = livingAllySeats(state);
     if (seats.length === 0) break;
+    if (enemyStunned(enemy)) {
+      addLog(state, "combat", `The ${enemy.name} is stunned and reels.`);
+      continue;
+    }
+    // Bosses & elites may use a signature ability instead of a basic attack.
+    if (tryEnemyAbility(state, enemy)) continue;
+
     const seat = pick(seats);
-    const target = state.party[seat];
     const ac = effectiveAc(state, seat);
     const d20 = roll(20);
     const total = d20 + enemy.attack;
@@ -252,14 +414,10 @@ function enemyPhase(state: GameState): void {
     if (d20 === 1) {
       addLog(state, "combat", `The ${enemy.name} stumbles and misses ${tname}.`);
     } else if (d20 === 20 || total >= ac) {
-      let dmg = rollDice(enemy.damage[0], enemy.damage[1]) + enemy.damageBonus;
-      if (d20 === 20) dmg = Math.round(dmg * 1.5);
-      target.hp = Math.max(0, target.hp - dmg);
+      let raw = rollDice(enemy.damage[0], enemy.damage[1]) + enemy.damageBonus;
+      if (d20 === 20) raw = Math.round(raw * 1.5);
+      const dmg = damageAlly(state, seat, raw);
       addLog(state, "combat", `The ${enemy.name} hits ${tname} for ${dmg} damage.${d20 === 20 ? " A brutal critical!" : ""}`);
-      if (target.hp <= 0) {
-        target.downed = true;
-        addLog(state, "combat", `${tname} is knocked out!`);
-      }
     } else {
       addLog(state, "combat", `The ${enemy.name} attacks ${tname} — turned aside. (${total} vs AC ${ac})`);
     }
@@ -286,6 +444,31 @@ function endRound(state: GameState): void {
       .map((b) => ({ ...b, turns: b.turns - 1 }))
       .filter((b) => b.turns > 0);
   }
+  // Tick ally status effects (DoT, regen) and decrement durations.
+  for (const seat of livingAllySeats(state)) {
+    const c = state.party[seat];
+    const list = allyStatusList(state, seat);
+    for (const s of list) {
+      if (s.turns <= 0) continue;
+      if (s.type === "poison" || s.type === "burn" || s.type === "bleed") {
+        c.hp = Math.max(0, c.hp - s.magnitude);
+        addLog(state, "combat", `${who(state, seat)} takes ${s.magnitude} ${s.type} damage.`);
+      } else if (s.type === "regen") {
+        const maxHp = effectiveMaxHp(c, state.gear);
+        c.hp = Math.min(maxHp, c.hp + s.magnitude);
+      }
+    }
+    if (c.hp <= 0 && !c.downed) {
+      c.downed = true;
+      addLog(state, "combat", `${who(state, seat)} succumbs!`);
+    }
+    state.combat.statuses[seat] = list.map((s) => ({ ...s, turns: s.turns - 1 })).filter((s) => s.turns > 0);
+  }
+  if (livingAllySeats(state).length === 0) {
+    loseCombat(state);
+    return;
+  }
+
   // Passive Weave regen + Regenerating perk for living heroes.
   for (const seat of livingAllySeats(state)) {
     const c = state.party[seat];
@@ -298,6 +481,11 @@ function endRound(state: GameState): void {
         addLog(state, "combat", `${who(state, seat)}'s gear regenerates 2 HP.`);
       }
     }
+  }
+
+  // If every living hero is stunned, the enemies press their advantage again.
+  if (aliveEnemies(state).length > 0 && livingAllySeats(state).length > 0 && currentAllySeat(state) < 0) {
+    enemyPhase(state);
   }
 }
 

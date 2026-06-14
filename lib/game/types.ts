@@ -100,10 +100,11 @@ export type EquipSlot = "weapon" | "armor" | "ring1" | "ring2" | "amulet";
 export type EquipSlots = Record<EquipSlot, string | null>; // slot -> ItemInstance uid
 
 export type AbilityEffect =
-  | { type: "damage"; dice: [number, number]; bonus?: number; element?: string }
+  | { type: "damage"; dice: [number, number]; bonus?: number; element?: string; applies?: StatusEffect }
   | { type: "heal"; amount: number }
   | { type: "buff"; stat: "ac" | "attack"; amount: number; turns: number }
-  | { type: "drain"; amount: number };
+  | { type: "drain"; amount: number }
+  | { type: "revive"; amount: number }; // restore a downed ally to `amount` HP
 
 export interface AbilityDef {
   id: string;
@@ -111,9 +112,10 @@ export interface AbilityDef {
   desc: string;
   mpCost: number;
   cooldown: number; // turns
-  target: "enemy" | "self" | "all-enemies";
+  target: "enemy" | "self" | "all-enemies" | "ally";
   effect: AbilityEffect;
   scalesWith?: AbilityKey;
+  dayCooldown?: number; // in-game days between uses (Phase E); undefined = none
 }
 
 export interface Character {
@@ -134,6 +136,19 @@ export interface Character {
   createdAt: number;
 }
 
+export type StatusType = "poison" | "burn" | "bleed" | "stun" | "regen" | "defend";
+export interface StatusEffect {
+  type: StatusType;
+  turns: number;
+  magnitude: number; // damage/heal per tick (0 for stun/defend)
+}
+
+export type EnemyAbility =
+  | { name: string; kind: "aoe"; dice: [number, number]; bonus: number; chance: number }
+  | { name: string; kind: "heavy"; dice: [number, number]; bonus: number; lifesteal?: boolean; chance: number }
+  | { name: string; kind: "status"; status: StatusType; turns: number; magnitude: number; chance: number }
+  | { name: string; kind: "heal"; amount: number; chance: number };
+
 export interface Enemy {
   id: string;
   name: string;
@@ -147,6 +162,8 @@ export interface Enemy {
   xp: number;
   goldDrop: [number, number];
   lootTable?: { itemId: string; chance: number }[];
+  statuses?: StatusEffect[];
+  abilities?: EnemyAbility[];
 }
 
 export type LogKind =
@@ -193,6 +210,7 @@ export interface CombatState {
   acted: number[]; // party seats that have acted this round
   cooldowns: Record<number, Record<string, number>>; // seat -> abilityId -> turns
   buffs: Record<number, Buff[]>; // seat -> active buffs
+  statuses: Record<number, StatusEffect[]>; // seat -> active status effects
   luckUsed: Record<number, boolean>; // seat -> halfling reroll spent this battle
   originSceneId: string; // scene the fight started in (flee returns here)
   returnSceneId: string;

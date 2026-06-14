@@ -24,6 +24,7 @@ import {
   playerAbility,
   playerUseItem,
   playerFlee,
+  playerDefend,
 } from "./combat";
 import type { AiAction, AiEffect } from "./dm";
 
@@ -162,6 +163,7 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
         acted: [],
         cooldowns: {},
         buffs: {},
+        statuses: {},
         luckUsed: {},
         originSceneId: state.sceneId,
         returnSceneId: opts.onWin,
@@ -331,6 +333,14 @@ export function combatFlee(prev: GameState): GameState {
   return state;
 }
 
+export function combatDefend(prev: GameState): GameState {
+  const state = clone(prev);
+  if (state.phase !== "combat") return state;
+  playerDefend(state);
+  resolveAfterCombat(state);
+  return state;
+}
+
 // Append an AI-DM narration line without otherwise touching game state.
 export function appendNarration(prev: GameState, text: string): GameState {
   const state = clone(prev);
@@ -412,7 +422,8 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
           acted: [],
           cooldowns: {},
           buffs: {},
-          luckUsed: {},
+          statuses: {},
+        luckUsed: {},
           originSceneId: state.sceneId,
           returnSceneId: state.sceneId,
         };

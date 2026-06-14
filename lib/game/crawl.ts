@@ -167,6 +167,7 @@ const SCENE_LIST: Scene[] = [
         buy("dc_buy_drink", "energy_drink", 12, "an Energy Drink"),
         buy("dc_buy_stim", "stim_pack", 30, "a Stim-Pack"),
         buy("dc_buy_nano", "nano_serum", 15, "Nano-Serum (mana)"),
+        buy("dc_buy_revive", "revive_kit", 60, "Revivify Salts (revive an ally)"),
         buy("dc_buy_kev", "kevlar_vest", 35, "a Kevlar Vest (armor)"),
         buy("dc_buy_power", "power_armor", 90, "Knockoff Power Armor"),
         buy("dc_buy_baton", "riot_baton", 18, "a Riot Baton"),

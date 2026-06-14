@@ -5,6 +5,10 @@ import type { GameState } from "@/lib/game/types";
 import { ABILITIES, ITEMS, getItem } from "@/lib/game/content";
 import { currentAllySeat } from "@/lib/game/combat";
 
+const STATUS_ICON: Record<string, string> = {
+  poison: "☠", burn: "🔥", bleed: "🩸", stun: "💫", regen: "✚", defend: "🛡",
+};
+
 export default function CombatPanel({
   state,
   canAct,
@@ -12,6 +16,7 @@ export default function CombatPanel({
   onAbility,
   onItem,
   onFlee,
+  onDefend,
   disabled,
 }: {
   state: GameState;
@@ -20,6 +25,7 @@ export default function CombatPanel({
   onAbility: (id: string, idx: number) => void;
   onItem: (id: string) => void;
   onFlee: () => void;
+  onDefend: () => void;
   disabled?: boolean;
 }) {
   const combat = state.combat;
@@ -60,6 +66,9 @@ export default function CombatPanel({
             <span className="font-display text-gold-300">Your turn</span>
           )}
           <span className="ml-2 text-xs text-parchment-300/60">Round {combat.round + 1}</span>
+          {seat >= 0 && (combat.statuses[seat] ?? []).filter((s) => s.turns > 0).map((s) => (
+            <span key={s.type} title={`${s.type} (${s.turns})`} className="ml-1">{STATUS_ICON[s.type]}</span>
+          ))}
         </div>
       )}
 
@@ -86,6 +95,9 @@ export default function CombatPanel({
                 <span className="font-display text-parchment-100">
                   {selected && !dead ? "🎯 " : ""}
                   {e.name} {dead && "(slain)"}
+                  {(e.statuses ?? []).filter((s) => s.turns > 0).map((s) => (
+                    <span key={s.type} title={`${s.type} (${s.turns})`} className="ml-1">{STATUS_ICON[s.type]}</span>
+                  ))}
                 </span>
                 <span className="tabular-nums text-parchment-300/70">{Math.max(0, e.hp)}/{e.maxHp}</span>
               </div>
@@ -134,6 +146,10 @@ export default function CombatPanel({
             <span className="text-[10px] text-moss-400">×{qty}</span>
           </button>
         ))}
+
+        <button className="ghost-btn" disabled={off} onClick={onDefend} title="Brace: +4 AC and halved damage until your next turn">
+          🛡 Defend
+        </button>
 
         <button className="ghost-btn !border-ember-400/30 text-ember-400" disabled={off} onClick={onFlee}>
           🏃 Flee

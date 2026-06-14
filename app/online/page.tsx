@@ -289,6 +289,7 @@ export default function OnlinePage() {
         onAbility: (id, t) => session.action({ kind: "ability", id, target: t }),
         onItem: (id) => session.action({ kind: "item", id }),
         onFlee: () => session.action({ kind: "flee" }),
+        onDefend: () => session.action({ kind: "defend" }),
         onUsePotion: (id, seat) => session.action({ kind: "useItem", itemId: id, seat }),
         onEquip: (uid, seat) => session.action({ kind: "equip", uid, seat }),
         onAct,

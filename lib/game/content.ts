@@ -378,9 +378,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
     effect: { type: "buff", stat: "ac", amount: 5, turns: 2 },
   },
   venom_strike: {
-    id: "venom_strike", name: "Venom Strike", desc: "A poisoned blade. 2d8 + DEX poison damage.",
+    id: "venom_strike", name: "Venom Strike", desc: "A poisoned blade. 2d8 + DEX damage, plus poison.",
     mpCost: 4, cooldown: 2, target: "enemy",
-    effect: { type: "damage", dice: [2, 8], element: "poison" }, scalesWith: "dex",
+    effect: { type: "damage", dice: [2, 8], element: "poison", applies: { type: "poison", turns: 3, magnitude: 3 } }, scalesWith: "dex",
   },
   arcane_surge: {
     id: "arcane_surge", name: "Arcane Surge", desc: "Raw force unleashed. 3d6 + INT damage.",
@@ -403,9 +403,9 @@ export const ABILITIES: Record<string, AbilityDef> = {
     effect: { type: "damage", dice: [2, 4] }, scalesWith: "dex",
   },
   stunning_strike: {
-    id: "stunning_strike", name: "Stunning Strike", desc: "A precise nerve strike. 2d6 + DEX damage.",
-    mpCost: 3, cooldown: 2, target: "enemy",
-    effect: { type: "damage", dice: [2, 6] }, scalesWith: "dex",
+    id: "stunning_strike", name: "Stunning Strike", desc: "A precise nerve strike. 2d6 + DEX damage; may stun.",
+    mpCost: 3, cooldown: 3, target: "enemy",
+    effect: { type: "damage", dice: [2, 6], applies: { type: "stun", turns: 1, magnitude: 0 } }, scalesWith: "dex",
   },
 };
 

@@ -11,6 +11,7 @@ import {
   combatAbility,
   combatItem,
   combatFlee,
+  combatDefend,
   useItemExploring,
   equipItem,
   appendNarration,
@@ -63,6 +64,7 @@ type GameAction =
   | { kind: "ability"; id: string; target: number }
   | { kind: "item"; id: string }
   | { kind: "flee" }
+  | { kind: "defend" }
   | { kind: "useItem"; itemId: string; seat: number }
   | { kind: "equip"; uid: string; seat: number };
 
@@ -232,6 +234,7 @@ export class GameRoom {
       else if (action.kind === "ability") this.data.game = combatAbility(g, action.id, action.target);
       else if (action.kind === "item") this.data.game = combatItem(g, action.id);
       else if (action.kind === "flee") this.data.game = combatFlee(g);
+      else if (action.kind === "defend") this.data.game = combatDefend(g);
     }
   }
 

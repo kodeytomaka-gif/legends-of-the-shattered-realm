@@ -31,20 +31,27 @@ const TEMPLATES: Record<string, EnemyTemplate> = {
     id: "ogre", name: "Wasteland Ogre", desc: "A mountain of grey muscle that smells of rot.",
     hp: 55, ac: 13, attack: 5, damage: [2, 6], damageBonus: 2, xp: 150, goldDrop: [15, 40],
     lootTable: [{ itemId: "potion_greater", chance: 0.35 }, { itemId: "plate_armor", chance: 0.15 }],
+    abilities: [{ name: "Ground Slam", kind: "aoe", dice: [1, 8], bonus: 1, chance: 0.3 }],
   },
   wraith: {
     id: "wraith", name: "Hollow Wraith", desc: "A wound in the air shaped like a person who is gone.",
     hp: 45, ac: 14, attack: 5, damage: [1, 8], damageBonus: 2, xp: 140, goldDrop: [10, 25],
     lootTable: [{ itemId: "lumen_charm", chance: 0.3 }, { itemId: "potion_greater", chance: 0.3 }],
+    abilities: [{ name: "Life Drain", kind: "heavy", dice: [2, 6], bonus: 2, lifesteal: true, chance: 0.35 }],
   },
   shard_warden: {
     id: "shard_warden", name: "Warden of the Shard", desc: "A construct of stone and shardglass, ancient and patient.",
     hp: 50, ac: 14, attack: 4, damage: [2, 6], damageBonus: 2, xp: 160, goldDrop: [30, 60],
     lootTable: [{ itemId: "shard_blade", chance: 0.4 }, { itemId: "potion_greater", chance: 0.5 }],
+    abilities: [{ name: "Shard Burst", kind: "aoe", dice: [1, 6], bonus: 1, chance: 0.25 }],
   },
   sundered_king: {
     id: "sundered_king", name: "The Sundered King", desc: "The one who broke the world, wearing a crown of floating shards.",
     hp: 120, ac: 15, attack: 7, damage: [2, 8], damageBonus: 4, xp: 600, goldDrop: [80, 150],
+    abilities: [
+      { name: "Cataclysm", kind: "aoe", dice: [2, 6], bonus: 2, chance: 0.28 },
+      { name: "Shatterbind", kind: "status", status: "stun", turns: 1, magnitude: 0, chance: 0.16 },
+    ],
   },
 
   // ── The Dungeon Crawl (stats mirror the tuned fantasy tiers) ──
@@ -72,15 +79,21 @@ const TEMPLATES: Record<string, EnemyTemplate> = {
     id: "floor_manager", name: "The Floor Manager", desc: "A bloated bureaucrat-thing in a dented hardhat, here to enforce 'quotas'.",
     hp: 55, ac: 13, attack: 5, damage: [2, 6], damageBonus: 2, xp: 150, goldDrop: [15, 40],
     lootTable: [{ itemId: "stim_pack", chance: 0.35 }, { itemId: "power_armor", chance: 0.15 }],
+    abilities: [{ name: "Stapler Barrage", kind: "aoe", dice: [1, 8], bonus: 1, chance: 0.3 }],
   },
   compliance_officer: {
     id: "compliance_officer", name: "Compliance Officer", desc: "Chrome, patient, and authorized to use lethal customer service.",
     hp: 50, ac: 14, attack: 4, damage: [2, 6], damageBonus: 2, xp: 160, goldDrop: [30, 60],
     lootTable: [{ itemId: "railgun_pistol", chance: 0.4 }, { itemId: "stim_pack", chance: 0.5 }],
+    abilities: [{ name: "Taser Protocol", kind: "status", status: "stun", turns: 1, magnitude: 0, chance: 0.2 }],
   },
   the_showrunner: {
     id: "the_showrunner", name: "The Showrunner", desc: "The smiling host of the whole bloody program, wearing a headset and your future.",
     hp: 120, ac: 15, attack: 7, damage: [2, 8], damageBonus: 4, xp: 600, goldDrop: [80, 150],
+    abilities: [
+      { name: "Pyro Finale", kind: "aoe", dice: [2, 6], bonus: 2, chance: 0.26 },
+      { name: "Ad Break", kind: "status", status: "stun", turns: 1, magnitude: 0, chance: 0.16 },
+    ],
   },
 };
 

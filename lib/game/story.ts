@@ -159,6 +159,7 @@ const SCENE_LIST: Scene[] = [
         buy("b_pot", "potion_minor", 12, "a Minor Healing Draught"),
         buy("b_pot2", "potion_greater", 30, "a Greater Healing Draught"),
         buy("b_mana", "potion_mana", 15, "a Vial of Weave"),
+        buy("b_revive", "revive_kit", 60, "Revivify Salts (revive an ally)"),
         buy("b_chain", "chainmail", 35, "Chainmail (armor)"),
         buy("b_plate", "plate_armor", 90, "Riven Plate (armor)"),
         buy("b_charm", "lumen_charm", 40, "a Lumen Charm"),
