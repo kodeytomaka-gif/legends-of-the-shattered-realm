@@ -9,6 +9,13 @@ name = "legends-of-the-shattered-realm"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
 
+# Attach the custom domain to this Worker on deploy. Requires the zone to live in
+# the same Cloudflare account (it does — the domain is on Cloudflare Registrar).
+routes = [
+  { pattern = "legendsoftheshatteredrealm.com", custom_domain = true },
+  { pattern = "www.legendsoftheshatteredrealm.com", custom_domain = true },
+]
+
 [assets]
 directory = "./out"
 binding = "ASSETS"
