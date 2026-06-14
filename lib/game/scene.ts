@@ -33,6 +33,8 @@ export interface Choice {
   hint?: string | ((s: GameState) => string | undefined);
   show?: (s: GameState) => boolean;
   enabled?: (s: GameState) => boolean;
+  // If set, the UI shows an "are you sure?" popup with this text before running.
+  confirm?: string | ((s: GameState) => string | undefined);
   run: (ctx: SceneContext) => void;
 }
 

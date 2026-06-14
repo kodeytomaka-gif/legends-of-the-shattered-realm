@@ -39,6 +39,37 @@ function openLootBox(ctx: { give: (id: string, q?: number) => void; gold: (n: nu
   }
 }
 
+// One free box per safe room ("daily"). Grabbing extras provokes Goblin Thieves
+// who arrive to repossess your ill-gotten loot.
+function lootChoice(s: GameState, usedFlag: string, returnScene: string): Choice {
+  if (!s.flags[usedFlag]) {
+    return {
+      id: usedFlag + "_free",
+      label: "Open the daily Loot Box (free)",
+      hint: "One per day",
+      run: (ctx) => {
+        openLootBox(ctx);
+        ctx.setFlag(usedFlag, true);
+        ctx.say(`The System chimes: "One free box per day, Crawler. Don't get greedy."`);
+      },
+    };
+  }
+  return {
+    id: usedFlag + "_extra",
+    label: "⚠ Pry open ANOTHER Loot Box",
+    hint: "Past your daily limit — the System is watching",
+    confirm: `The System purrs: "That's past your one-per-day, Crawler. Take another and I'll send someone to collect." Grab it anyway?`,
+    run: (ctx) => {
+      openLootBox(ctx);
+      ctx.combat(["goblin", "goblin"], {
+        onWin: returnScene,
+        scale: scale(ctx.state),
+        intro: "An alarm blares — Goblin Thieves scramble out of a maintenance hatch to repossess your ill-gotten loot!",
+      });
+    },
+  };
+}
+
 const SCENE_LIST: Scene[] = [
   // ───────────────────────── PROLOGUE ─────────────────────────
   {
@@ -119,7 +150,7 @@ const SCENE_LIST: Scene[] = [
     text: (s) => [
       `A grimy terminal blinks BLACK MARKET in a font that screams "trust me." Beans hops onto the counter. "Buy stuff. Don't read the fine print, it's load-bearing." You have ${s.gold} gold. Crowd Favor: ${favor(s)}.`,
     ],
-    choices: () => {
+    choices: (s) => {
       const buy = (id: string, itemId: string, cost: number, label: string): Choice => ({
         id,
         label: `Buy ${label} — ${cost}g`,
@@ -132,7 +163,7 @@ const SCENE_LIST: Scene[] = [
         },
       });
       return [
-        { id: "dc_box1", label: "Open a Loot Box (free, daily-ish)", hint: "Random reward", run: (ctx) => openLootBox(ctx) },
+        lootChoice(s, "box1_used", "dc_safe1"),
         buy("dc_buy_drink", "energy_drink", 12, "an Energy Drink"),
         buy("dc_buy_stim", "stim_pack", 30, "a Stim-Pack"),
         buy("dc_buy_nano", "nano_serum", 15, "Nano-Serum (mana)"),
@@ -322,7 +353,7 @@ const SCENE_LIST: Scene[] = [
     text: (s) => [
       `Same terminal, fancier font. "WELCOME BACK, VALUED CRAWLER." You have ${s.gold} gold.`,
     ],
-    choices: () => {
+    choices: (s) => {
       const buy = (id: string, itemId: string, cost: number, label: string): Choice => ({
         id,
         label: `Buy ${label} — ${cost}g`,
@@ -335,7 +366,7 @@ const SCENE_LIST: Scene[] = [
         },
       });
       return [
-        { id: "dc_box2", label: "Open a Loot Box", hint: "Random reward", run: (ctx) => openLootBox(ctx) },
+        lootChoice(s, "box2_used", "dc_safe2"),
         buy("dc_buy_stim2", "stim_pack", 30, "a Stim-Pack"),
         buy("dc_buy_power2", "power_armor", 90, "Knockoff Power Armor"),
         buy("dc_buy_rail", "railgun_pistol", 120, "a Railgun Pistol"),

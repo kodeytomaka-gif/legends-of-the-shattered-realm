@@ -53,6 +53,7 @@ export default function GameScreen({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dice, setDice] = useState(true);
   const [narrate, setNarrate] = useState(false);
+  const [confirm, setConfirm] = useState<{ id: string; text: string } | null>(null);
 
   const lastRollId = useRef<string | null>(null);
   const [pendingRoll, setPendingRoll] = useState<RollMeta | null>(null);
@@ -149,6 +150,26 @@ export default function GameScreen({
     <>
     <SceneBackground campaignId={state.campaignId} region={scene.region ?? ""} />
     {pendingRoll && <DiceOverlay roll={pendingRoll} onDone={() => setPendingRoll(null)} />}
+    {confirm && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-6" onClick={() => setConfirm(null)}>
+        <div className="rune-card max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+          <p className="text-parchment-100">{confirm.text}</p>
+          <div className="mt-5 flex justify-center gap-3">
+            <button
+              className="gold-btn"
+              onClick={() => {
+                const id = confirm.id;
+                setConfirm(null);
+                handlers.onChoose(id);
+              }}
+            >
+              Yes, do it
+            </button>
+            <button className="ghost-btn" onClick={() => setConfirm(null)}>Never mind</button>
+          </div>
+        </div>
+      </div>
+    )}
     <main className="mx-auto flex h-[100dvh] max-w-3xl flex-col gap-3 px-4 py-4">
       <div className="relative flex items-center justify-between gap-2">
         <button onClick={handlers.onExit} className="ghost-btn !px-3 text-sm">{exitLabel}</button>
@@ -191,8 +212,14 @@ export default function GameScreen({
               const label = typeof c.label === "function" ? c.label(state) : c.label;
               const hint = typeof c.hint === "function" ? c.hint(state) : c.hint;
               const enabled = (c.enabled ? c.enabled(state) : true) && canAct;
+              const confirmText = typeof c.confirm === "function" ? c.confirm(state) : c.confirm;
               return (
-                <button key={c.id} className="choice-btn" disabled={!enabled} onClick={() => handlers.onChoose(c.id)}>
+                <button
+                  key={c.id}
+                  className="choice-btn"
+                  disabled={!enabled}
+                  onClick={() => (confirmText ? setConfirm({ id: c.id, text: confirmText }) : handlers.onChoose(c.id))}
+                >
                   <span>{label}</span>
                   {hint && <span className="mt-0.5 block text-xs text-parchment-300/50">{hint}</span>}
                 </button>
