@@ -72,9 +72,6 @@ export function createCharacter(opts: {
   const def = CLASSES[klass];
   const abilities = applyRaceBonuses(opts.abilities, race);
 
-  const inventory: InventorySlot[] = [];
-  for (const itemId of def.startingItems) addToInventory(inventory, itemId, 1);
-
   const primaryScore = abilities[def.primary];
   const maxHp = maxHpFor(klass, abilities.con, 1, false);
   const maxMp = maxMpFor(klass, primaryScore, 1);
@@ -94,18 +91,38 @@ export function createCharacter(opts: {
     maxHp,
     mp: maxMp,
     maxMp,
-    gold: def.startingGold,
-    inventory,
     equippedWeapon: weapon,
     equippedArmor: armor,
     abilityIds: [...def.startingAbilities],
-    shards: 0,
+    downed: false,
     createdAt: Date.now(),
   };
 }
 
-export function hasItem(char: Character, itemId: string): boolean {
-  return char.inventory.some((s) => s.itemId === itemId && s.qty > 0);
+// A hero's starting gold and the non-equipped items they bring to the shared
+// party pool (their equipped weapon/armor are not duplicated into inventory).
+export function startingKit(klass: ClassId): { gold: number; items: string[] } {
+  const def = CLASSES[klass];
+  const weapon = def.startingItems.find((id) => getItem(id).kind === "weapon");
+  const armor = def.startingItems.find((id) => getItem(id).kind === "armor");
+  const equipped = new Set<string>();
+  if (weapon) equipped.add(weapon);
+  if (armor) equipped.add(armor);
+  const items: string[] = [];
+  const used = new Set<string>();
+  for (const id of def.startingItems) {
+    // Skip exactly one instance of each equipped weapon/armor.
+    if (equipped.has(id) && !used.has(id)) {
+      used.add(id);
+      continue;
+    }
+    items.push(id);
+  }
+  return { gold: def.startingGold, items };
+}
+
+export function hasItem(inventory: InventorySlot[], itemId: string): boolean {
+  return inventory.some((s) => s.itemId === itemId && s.qty > 0);
 }
 
 export function addToInventory(inv: InventorySlot[], itemId: string, qty: number): void {
@@ -167,14 +184,13 @@ const PROGRESSION: Record<ClassId, Record<number, string>> = {
   ranger: { 3: "hunters_mark", 5: "aimed_shot" },
 };
 
-export function grantXp(char: Character, amount: number): LevelUpResult {
+export function grantXp(char: Character, amount: number, hasLumen = false): LevelUpResult {
   const raceBonus = char.race === "human" ? 1.1 : 1;
   char.xp += Math.round(amount * raceBonus);
   let leveled = false;
   let hpGain = 0;
   let mpGain = 0;
   let newAbility: string | undefined;
-  const hasLumen = hasItem(char, "lumen_charm");
 
   while (char.xp >= xpToNext(char.level)) {
     char.xp -= xpToNext(char.level);

@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import type { GameState } from "@/lib/game/types";
 import { ABILITIES, ITEMS, getItem } from "@/lib/game/content";
+import { currentAllySeat } from "@/lib/game/combat";
 
 export default function CombatPanel({
   state,
+  canAct,
   onAttack,
   onAbility,
   onItem,
@@ -13,6 +15,7 @@ export default function CombatPanel({
   disabled,
 }: {
   state: GameState;
+  canAct: boolean; // false in online mode when it isn't this client's hero
   onAttack: (idx: number) => void;
   onAbility: (id: string, idx: number) => void;
   onItem: (id: string) => void;
@@ -22,7 +25,6 @@ export default function CombatPanel({
   const combat = state.combat;
   const [target, setTarget] = useState(0);
 
-  // Keep the selected target valid as enemies die.
   useEffect(() => {
     if (!combat) return;
     if (!combat.enemies[target] || combat.enemies[target].hp <= 0) {
@@ -32,9 +34,13 @@ export default function CombatPanel({
   }, [combat, target]);
 
   if (!combat) return null;
-  const char = state.character;
+  const seat = currentAllySeat(state);
+  const hero = seat >= 0 ? state.party[seat] : null;
+  const multi = state.party.length > 1;
+  const off = disabled || !canAct || !hero;
 
-  const potions = char.inventory
+  const cooldowns = (seat >= 0 && combat.cooldowns[seat]) || {};
+  const potions = state.inventory
     .filter((s) => getItem(s.itemId).kind === "potion")
     .reduce<Record<string, number>>((acc, s) => {
       acc[s.itemId] = (acc[s.itemId] ?? 0) + s.qty;
@@ -42,7 +48,21 @@ export default function CombatPanel({
     }, {});
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {/* Turn banner */}
+      {hero && (
+        <div className={`rounded-md border px-3 py-1.5 text-center text-sm ${canAct ? "border-gold-400/60 bg-ink-600/40" : "border-gold-400/20 bg-ink-800/60"}`}>
+          {multi ? (
+            <span className="font-display text-gold-300">
+              {canAct ? `▸ ${hero.name}'s turn` : `Waiting for ${hero.name}…`}
+            </span>
+          ) : (
+            <span className="font-display text-gold-300">Your turn</span>
+          )}
+          <span className="ml-2 text-xs text-parchment-300/60">Round {combat.round + 1}</span>
+        </div>
+      )}
+
       {/* Enemies */}
       <div className="space-y-2">
         {combat.enemies.map((e, i) => {
@@ -67,9 +87,7 @@ export default function CombatPanel({
                   {selected && !dead ? "🎯 " : ""}
                   {e.name} {dead && "(slain)"}
                 </span>
-                <span className="tabular-nums text-parchment-300/70">
-                  {Math.max(0, e.hp)}/{e.maxHp}
-                </span>
+                <span className="tabular-nums text-parchment-300/70">{Math.max(0, e.hp)}/{e.maxHp}</span>
               </div>
               <div className="bar-track mt-1.5">
                 <div className="h-full rounded-full bg-gradient-to-r from-ember-500 to-ember-400 transition-all" style={{ width: `${pct}%` }} />
@@ -79,30 +97,27 @@ export default function CombatPanel({
         })}
       </div>
 
-      {/* Actions */}
+      {/* Current hero's actions */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <button className="gold-btn" disabled={disabled} onClick={() => onAttack(target)}>
+        <button className="gold-btn" disabled={off} onClick={() => onAttack(target)}>
           ⚔ Attack
         </button>
 
-        {char.abilityIds.map((id) => {
+        {hero?.abilityIds.map((id) => {
           const a = ABILITIES[id];
           if (!a) return null;
-          const cd = combat.cooldowns[id] ?? 0;
-          const tooExpensive = char.mp < a.mpCost;
-          const off = disabled || cd > 0 || tooExpensive;
+          const cd = cooldowns[id] ?? 0;
+          const tooExpensive = hero.mp < a.mpCost;
           return (
             <button
               key={id}
               className="ghost-btn flex-col !items-start !py-1.5 text-left"
-              disabled={off}
+              disabled={off || cd > 0 || tooExpensive}
               title={a.desc}
               onClick={() => onAbility(id, target)}
             >
               <span className="text-sm">{a.name}</span>
-              <span className="text-[10px] text-arcane-400/80">
-                {a.mpCost} Weave{cd > 0 ? ` · CD ${cd}` : ""}
-              </span>
+              <span className="text-[10px] text-arcane-400/80">{a.mpCost} Weave{cd > 0 ? ` · CD ${cd}` : ""}</span>
             </button>
           );
         })}
@@ -111,7 +126,7 @@ export default function CombatPanel({
           <button
             key={id}
             className="ghost-btn flex-col !items-start !py-1.5 text-left"
-            disabled={disabled}
+            disabled={off}
             title={ITEMS[id].desc}
             onClick={() => onItem(id)}
           >
@@ -120,7 +135,7 @@ export default function CombatPanel({
           </button>
         ))}
 
-        <button className="ghost-btn !border-ember-400/30 text-ember-400" disabled={disabled} onClick={onFlee}>
+        <button className="ghost-btn !border-ember-400/30 text-ember-400" disabled={off} onClick={onFlee}>
           🏃 Flee
         </button>
       </div>

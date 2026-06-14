@@ -19,6 +19,7 @@ export interface SceneContext {
   heal: (amount: number) => void;
   hurt: (amount: number) => void;
   restoreMp: (amount: number) => void;
+  restParty: () => void; // fully restore HP & Weave for the whole party
   addShard: () => void;
   xp: (amount: number) => void;
   setFlag: (key: string, value?: boolean | number | string) => void;

@@ -92,12 +92,10 @@ export interface Character {
   maxHp: number;
   mp: number;
   maxMp: number;
-  gold: number;
-  inventory: InventorySlot[];
   equippedWeapon: string | null;
   equippedArmor: string | null;
   abilityIds: string[];
-  shards: number; // Shards of Aethyr collected
+  downed: boolean; // knocked out during the current battle
   createdAt: number;
 }
 
@@ -135,14 +133,23 @@ export interface LogEntry {
 
 export type Phase = "creating" | "exploring" | "combat" | "gameover" | "victory";
 
+export interface Buff {
+  stat: "ac" | "attack";
+  amount: number;
+  turns: number;
+}
+
+// Side-based party combat: every living hero acts (in seat order) during the
+// player phase, then every enemy acts. Cooldowns/buffs are tracked per hero seat.
 export interface CombatState {
   enemies: Enemy[];
-  turn: number;
-  cooldowns: Record<string, number>; // abilityId -> turns remaining
-  buffs: { stat: "ac" | "attack"; amount: number; turns: number }[];
-  // where to return after combat resolves
+  round: number;
+  acted: number[]; // party seats that have acted this round
+  cooldowns: Record<number, Record<string, number>>; // seat -> abilityId -> turns
+  buffs: Record<number, Buff[]>; // seat -> active buffs
+  luckUsed: Record<number, boolean>; // seat -> halfling reroll spent this battle
+  originSceneId: string; // scene the fight started in (flee returns here)
   returnSceneId: string;
-  // optional scene id to jump to if the player flees
   fleeSceneId?: string;
 }
 
@@ -150,7 +157,14 @@ export interface GameState {
   version: number;
   campaignId: string;
   phase: Phase;
-  character: Character;
+  // A shared co-op party of 1-4 heroes (seat index = order in this array).
+  party: Character[];
+  // Shared party resources.
+  gold: number;
+  inventory: InventorySlot[];
+  shards: number; // Shards of Aethyr collected (campaign 1)
+  // Whose turn it is to make exploration decisions (seat index).
+  turnPlayer: number;
   sceneId: string;
   visited: string[];
   flags: Record<string, boolean | number | string>;

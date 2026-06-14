@@ -1,72 +1,74 @@
 "use client";
 
-import type { Character } from "@/lib/game/types";
+import type { GameState, Character } from "@/lib/game/types";
 import { RACES, CLASSES } from "@/lib/game/content";
-import { armorClass, attackBonus, xpToNext } from "@/lib/game/character";
-import { modString } from "@/lib/game/dice";
+import { armorClass } from "@/lib/game/character";
 
-function Bar({
-  value,
-  max,
-  className,
-  label,
-}: {
-  value: number;
-  max: number;
-  className: string;
-  label: string;
-}) {
+function MiniBar({ value, max, className }: { value: number; max: number; className: string }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   return (
-    <div className="min-w-0 flex-1">
-      <div className="mb-0.5 flex items-baseline justify-between text-xs">
-        <span className="font-display tracking-wide text-parchment-300/70">{label}</span>
-        <span className="tabular-nums text-parchment-200/80">
-          {value}/{max}
+    <div className="h-1.5 w-full overflow-hidden rounded-full border border-black/40 bg-ink-900/80">
+      <div className={`h-full rounded-full transition-all duration-500 ${className}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function HeroCard({ c, active, downed }: { c: Character; active: boolean; downed: boolean }) {
+  return (
+    <div
+      className={`rounded-md border px-2.5 py-1.5 transition ${
+        downed
+          ? "border-ink-600 bg-ink-900/60 opacity-60"
+          : active
+            ? "border-gold-400 bg-ink-600/50 shadow-glow"
+            : "border-gold-400/20 bg-ink-900/50"
+      }`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-display text-sm text-parchment-100">
+          {active && "▸ "}
+          {c.name}
+          {downed && " 💀"}
+        </span>
+        <span className="shrink-0 text-[10px] text-parchment-300/60">
+          Lv{c.level} {CLASSES[c.klass].name} · 🛡{armorClass(c)}
         </span>
       </div>
-      <div className="bar-track">
-        <div className={`h-full rounded-full transition-all duration-500 ${className}`} style={{ width: `${pct}%` }} />
+      <div className="mt-1 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <span className="w-7 shrink-0 text-[10px] text-ember-400/80">{Math.max(0, c.hp)}</span>
+          <MiniBar value={c.hp} max={c.maxHp} className="bg-gradient-to-r from-ember-500 to-ember-400" />
+        </div>
+        {c.maxMp > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-7 shrink-0 text-[10px] text-arcane-400/80">{c.mp}</span>
+            <MiniBar value={c.mp} max={c.maxMp} className="bg-gradient-to-r from-arcane-500 to-arcane-400" />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function HeroBar({ character }: { character: Character }) {
-  const c = character;
-  const ac = armorClass(c);
-  const atk = attackBonus(c);
-  const nextXp = xpToNext(c.level);
-
+export default function HeroBar({ state, activeSeat }: { state: GameState; activeSeat: number }) {
+  const solo = state.party.length === 1;
   return (
     <div className="rune-panel">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <div className="min-w-0">
-          <h2 className="truncate font-display text-lg text-gold-400">{c.name}</h2>
-          <p className="text-xs text-parchment-300/70">
-            Lv {c.level} {RACES[c.race].name} {CLASSES[c.klass].name}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="rounded border border-gold-400/30 px-2 py-1" title="Armor Class">
-            🛡 AC {ac}
-          </span>
-          <span className="rounded border border-gold-400/30 px-2 py-1" title="Attack Bonus">
-            ⚔ {modString(atk)}
-          </span>
-          <span className="rounded border border-gold-400/30 px-2 py-1 text-gold-300" title="Gold">
-            ⦿ {c.gold}
-          </span>
-          <span className="rounded border border-arcane-400/40 px-2 py-1 text-arcane-400" title="Shards of Aethyr">
-            ✦ {c.shards}/3
-          </span>
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <span className="font-display tracking-wide text-gold-400/80">
+          {solo ? "Hero" : `Party of ${state.party.length}`}
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded border border-gold-400/30 px-2 py-0.5 text-gold-300" title="Shared gold">⦿ {state.gold}</span>
+          {state.campaignId === "shattered" && (
+            <span className="rounded border border-arcane-400/40 px-2 py-0.5 text-arcane-400" title="Shards of Aethyr">✦ {state.shards}/3</span>
+          )}
         </div>
       </div>
-
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:gap-4">
-        <Bar value={c.hp} max={c.maxHp} label="Health" className="bg-gradient-to-r from-ember-500 to-ember-400" />
-        <Bar value={c.mp} max={c.maxMp} label="Weave" className="bg-gradient-to-r from-arcane-500 to-arcane-400" />
-        <Bar value={c.xp} max={nextXp} label="Experience" className="bg-gradient-to-r from-gold-500 to-gold-300" />
+      <div className={`grid gap-2 ${solo ? "grid-cols-1" : "grid-cols-2"}`}>
+        {state.party.map((c, i) => (
+          <HeroCard key={i} c={c} active={i === activeSeat} downed={c.hp <= 0} />
+        ))}
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GameState } from "@/lib/game/types";
 import { getScene } from "@/lib/game/campaigns";
+import { currentAllySeat } from "@/lib/game/combat";
 import {
   chooseOption,
   combatAttack,
@@ -54,7 +55,7 @@ export default function PlayPage() {
   useEffect(() => {
     if (!state || !aiDm) return;
     if (state.phase !== "exploring") return;
-    const key = `${state.sceneId}#${state.character.shards}`;
+    const key = `${state.sceneId}#${state.shards}#${state.turnPlayer}`;
     if (lastEmbellished.current === key) return;
     lastEmbellished.current = key;
 
@@ -88,6 +89,9 @@ export default function PlayPage() {
 
   const scene = getScene(state.sceneId);
   const choices = state.phase === "exploring" ? scene.choices(state) : [];
+  const activeSeat = state.phase === "combat" ? currentAllySeat(state) : state.turnPlayer;
+  const multi = state.party.length > 1;
+  const activeName = state.party[activeSeat]?.name ?? state.party[0]?.name ?? "";
 
   async function submitAction(e: React.FormEvent) {
     e.preventDefault();
@@ -143,7 +147,7 @@ export default function PlayPage() {
         </button>
       </div>
 
-      <HeroBar character={state.character} />
+      <HeroBar state={state} activeSeat={activeSeat} />
 
       {/* Story log */}
       <section className="rune-card flex min-h-0 flex-1 flex-col !p-4">
@@ -152,6 +156,11 @@ export default function PlayPage() {
 
       {/* Action area */}
       <section className="shrink-0">
+        {state.phase === "exploring" && multi && (
+          <p className="mb-2 text-center text-xs font-display text-gold-300">
+            ▸ {activeName}&apos;s turn to decide — pass the device
+          </p>
+        )}
         {state.phase === "exploring" && (
           <div className="grid grid-cols-1 gap-2">
             {choices.map((c) => {
@@ -177,6 +186,7 @@ export default function PlayPage() {
         {state.phase === "combat" && (
           <CombatPanel
             state={state}
+            canAct
             disabled={aiBusy}
             onAttack={(idx) => commit(combatAttack(state, idx))}
             onAbility={(id, idx) => commit(combatAbility(state, id, idx))}
@@ -244,8 +254,8 @@ export default function PlayPage() {
         <CharacterSheet
           state={state}
           onClose={() => setSheetOpen(false)}
-          onUsePotion={(id) => commit(useItemExploring(state, id))}
-          onEquip={(id) => commit(equipItem(state, id))}
+          onUsePotion={(id, seat) => commit(useItemExploring(state, id, seat))}
+          onEquip={(id, seat) => commit(equipItem(state, id, seat))}
         />
       )}
     </main>

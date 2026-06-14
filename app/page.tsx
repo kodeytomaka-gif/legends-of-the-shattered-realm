@@ -19,10 +19,15 @@ export default function HomePage() {
     if (has) {
       const g = loadGame();
       if (g) {
-        const c = g.character;
         const camp = getCampaign(g.campaignId);
-        const progress = g.campaignId === "shattered" ? ` · ${c.shards}/3 Shards` : "";
-        setSummary(`${c.name} — Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name}${progress} · ${camp.title}`);
+        const progress = g.campaignId === "shattered" ? ` · ${g.shards}/3 Shards` : "";
+        if (g.party.length > 1) {
+          const names = g.party.map((c) => c.name).join(", ");
+          setSummary(`${names} — party of ${g.party.length}${progress} · ${camp.title}`);
+        } else {
+          const c = g.party[0];
+          setSummary(`${c.name} — Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name}${progress} · ${camp.title}`);
+        }
       }
     }
     setAiDm(loadSettings().aiDm);

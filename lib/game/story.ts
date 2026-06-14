@@ -2,7 +2,7 @@ import type { GameState } from "./types";
 import type { Scene, Choice } from "./scene";
 import { RACES, CLASSES } from "./content";
 
-const scale = (s: GameState) => Math.max(0, s.character.level - 1);
+const scale = (s: GameState) => Math.max(0, Math.max(...s.party.map((c) => c.level)) - 1);
 
 // Small helper to build a "travel" choice.
 function go(id: string, label: string, target: string, hint?: string): Choice {
@@ -17,11 +17,16 @@ const SCENE_LIST: Scene[] = [
     region: "The Sundering",
     aiEmbellish: true,
     text: (s) => {
-      const race = RACES[s.character.race].name.toLowerCase();
-      const klass = CLASSES[s.character.klass].name.toLowerCase();
+      const lead = s.party[0];
+      const race = RACES[lead.race].name.toLowerCase();
+      const klass = CLASSES[lead.klass].name.toLowerCase();
+      const youAre =
+        s.party.length > 1
+          ? `You are ${s.party.map((c) => c.name).join(", ")} — companions bound by the same impossible certainty: you are meant to be here.`
+          : `You are ${lead.name}, a ${race} ${klass}, and you remember almost nothing but a single certain thing: you are meant to be here.`;
       return [
         `You wake on cold ground beneath a sky split like cracked glass. Threads of pale light bleed between the fractures — the wound the Sundering left when the world broke apart.`,
-        `You are ${s.character.name}, a ${race} ${klass}, and you remember almost nothing but a single certain thing: you are meant to be here.`,
+        youAre,
         `A thin trail of smoke rises from a hollow in the hills. Someone keeps a fire nearby.`,
       ];
     },
@@ -76,7 +81,7 @@ const SCENE_LIST: Scene[] = [
     region: "Heartlands",
     aiEmbellish: true,
     text: (s) => {
-      const shards = s.character.shards;
+      const shards = s.shards;
       const lines = [
         `Four broken roads meet beneath a leaning signpost. The air hums faintly, the way the world does now near places where the Heart once was.`,
       ];
@@ -92,7 +97,7 @@ const SCENE_LIST: Scene[] = [
         s.flags.shard_wastes ? go("c_waste2", "Return to the Ashen Wastes", "wastes_entrance") : go("c_waste", "Travel to the Ashen Wastes", "wastes_entrance"),
         s.flags.shard_keep ? go("c_keep2", "Return to the Sunken Keep", "keep_entrance") : go("c_keep", "Travel to the Sunken Keep", "keep_entrance"),
       ];
-      if (s.character.shards >= 3) {
+      if (s.shards >= 3) {
         cs.push({
           id: "c_throne",
           label: "⚜ March north to the Sundered Throne",
@@ -136,15 +141,15 @@ const SCENE_LIST: Scene[] = [
     title: "The Merchant",
     region: "Heartlands",
     text: (s) => [
-      `A sharp-eyed trader spreads wares across a battered counter. "Coin first, questions never," she says. You have ${s.character.gold} gold.`,
+      `A sharp-eyed trader spreads wares across a battered counter. "Coin first, questions never," she says. You have ${s.gold} gold.`,
     ],
     choices: () => {
       const buy = (id: string, itemId: string, cost: number, label: string): Choice => ({
         id,
         label: `Buy ${label} — ${cost}g`,
-        enabled: (s) => s.character.gold >= cost,
+        enabled: (s) => s.gold >= cost,
         run: (ctx) => {
-          if (ctx.state.character.gold < cost) return;
+          if (ctx.state.gold < cost) return;
           ctx.gold(-cost);
           ctx.give(itemId, 1);
           ctx.say(`You purchase ${label}.`);
@@ -166,24 +171,23 @@ const SCENE_LIST: Scene[] = [
     title: "The Cracked Tankard",
     region: "Heartlands",
     text: (s) => [
-      `Warmth, woodsmoke, and the murmur of folk who have decided to live another night. A room costs 10 gold. You have ${s.character.gold}.`,
+      `Warmth, woodsmoke, and the murmur of folk who have decided to live another night. A room costs 10 gold. You have ${s.gold}.`,
     ],
     choices: () => [
       {
         id: "c_rest",
         label: "Take a room and rest (10g) — full HP & Weave",
-        enabled: (s) => s.character.gold >= 10 && (s.character.hp < s.character.maxHp || s.character.mp < s.character.maxMp),
+        enabled: (s) => s.gold >= 10 && (s.party.some((c) => c.hp < c.maxHp || c.mp < c.maxMp)),
         run: (ctx) => {
           ctx.gold(-10);
-          ctx.heal(9999);
-          ctx.restoreMp(9999);
+          ctx.restParty();
           ctx.log(`You sleep without dreams for the first time since you woke. You rise restored.`);
         },
       },
       {
         id: "c_meal",
         label: "Buy a hot meal (3g) — restore some HP",
-        enabled: (s) => s.character.gold >= 3,
+        enabled: (s) => s.gold >= 3,
         run: (ctx) => {
           ctx.gold(-3);
           ctx.heal(10);
@@ -421,7 +425,7 @@ const SCENE_LIST: Scene[] = [
       if (s.flags.keep_door) {
         cs.push(go("c_down", "Descend into the depths", "keep_depths"));
       } else {
-        if (s.character.inventory.some((i) => i.itemId === "iron_key")) {
+        if (s.inventory.some((i) => i.itemId === "iron_key")) {
           cs.push({
             id: "c_key",
             label: "Open the door with the Iron Key",
@@ -435,7 +439,7 @@ const SCENE_LIST: Scene[] = [
         cs.push({
           id: "c_pick",
           label: "Pick the lock (Sleight of Hand)",
-          hint: (s) => (s.character.inventory.some((i) => i.itemId === "lockpicks") ? "You have lockpicks" : "Harder without lockpicks"),
+          hint: (s) => (s.inventory.some((i) => i.itemId === "lockpicks") ? "You have lockpicks" : "Harder without lockpicks"),
           run: (ctx) => {
             const bonus = ctx.has("lockpicks") ? 2 : -2;
             const r = ctx.check("dex", 15, bonus);

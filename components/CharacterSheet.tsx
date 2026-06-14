@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { GameState } from "@/lib/game/types";
 import { ABILITY_KEYS, ABILITY_NAMES } from "@/lib/game/types";
 import { ABILITIES, getItem, RACES, CLASSES } from "@/lib/game/content";
@@ -13,14 +14,15 @@ export default function CharacterSheet({
 }: {
   state: GameState;
   onClose: () => void;
-  onUsePotion: (itemId: string) => void;
-  onEquip: (itemId: string) => void;
+  onUsePotion: (itemId: string, seat: number) => void;
+  onEquip: (itemId: string, seat: number) => void;
 }) {
-  const c = state.character;
+  const [seat, setSeat] = useState(Math.min(state.turnPlayer, state.party.length - 1));
+  const c = state.party[seat] ?? state.party[0];
   const canUsePotions = state.phase === "exploring";
+  const multi = state.party.length > 1;
 
-  // Group inventory by item id with counts.
-  const grouped = c.inventory.reduce<Record<string, number>>((acc, s) => {
+  const grouped = state.inventory.reduce<Record<string, number>>((acc, s) => {
     acc[s.itemId] = (acc[s.itemId] ?? 0) + s.qty;
     return acc;
   }, {});
@@ -32,16 +34,37 @@ export default function CharacterSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-2xl text-gold-400">{c.name}</h2>
+          <h2 className="font-display text-2xl text-gold-400">Party</h2>
           <button onClick={onClose} className="ghost-btn !px-3">✕</button>
         </div>
+
+        {/* Hero selector */}
+        {multi && (
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {state.party.map((h, i) => (
+              <button
+                key={i}
+                onClick={() => setSeat(i)}
+                className={`rounded-md border px-2.5 py-1 text-xs font-display transition ${
+                  i === seat ? "border-gold-400 bg-ink-600/60 text-gold-300" : "border-gold-400/20 bg-ink-700/40 text-parchment-200/80"
+                }`}
+              >
+                {h.name}
+                {h.hp <= 0 && " 💀"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <p className="text-sm text-parchment-100 font-display">{c.name}</p>
         <p className="text-sm text-parchment-300/70">
           Level {c.level} {RACES[c.race].name} {CLASSES[c.klass].name}
         </p>
+        <p className="mt-1 text-xs text-ember-400/80">HP {Math.max(0, c.hp)}/{c.maxHp} · Weave {c.mp}/{c.maxMp}</p>
         <p className="mt-1 text-xs text-moss-400">{RACES[c.race].trait}</p>
 
         {/* Abilities */}
-        <h3 className="mt-5 font-display text-gold-400/80">Abilities</h3>
+        <h3 className="mt-5 font-display text-gold-400/80">Ability Scores</h3>
         <div className="mt-2 grid grid-cols-3 gap-2">
           {ABILITY_KEYS.map((k) => (
             <div key={k} className="stat-pill">
@@ -70,42 +93,47 @@ export default function CharacterSheet({
           })}
         </div>
 
-        {/* Inventory */}
-        <h3 className="mt-5 font-display text-gold-400/80">Inventory</h3>
-        <div className="mt-2 space-y-1.5">
-          {Object.keys(grouped).length === 0 && (
-            <p className="text-sm text-parchment-300/50">Your pack is empty.</p>
-          )}
+        {/* Shared inventory */}
+        <h3 className="mt-5 flex items-center justify-between font-display text-gold-400/80">
+          <span>Party Stash</span>
+          <span className="text-xs text-gold-300">⦿ {state.gold} gold</span>
+        </h3>
+        <p className="mb-1 text-[11px] text-parchment-300/50">
+          {multi ? `Use/equip applies to ${c.name} (selected above).` : "Shared between consumables and gear."}
+        </p>
+        <div className="mt-1 space-y-1.5">
+          {Object.keys(grouped).length === 0 && <p className="text-sm text-parchment-300/50">The stash is empty.</p>}
           {Object.entries(grouped).map(([id, qty]) => {
             const item = getItem(id);
-            const equipped = c.equippedWeapon === id || c.equippedArmor === id;
+            const equippedBy = state.party
+              .filter((h) => h.equippedWeapon === id || h.equippedArmor === id)
+              .map((h) => h.name);
             const equippable = item.kind === "weapon" || item.kind === "armor";
+            const equippedHere = c.equippedWeapon === id || c.equippedArmor === id;
             return (
               <div key={id} className="rune-panel flex items-center justify-between !p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-display text-sm text-parchment-100">
-                      {item.name}
-                    </span>
+                    <span className="truncate font-display text-sm text-parchment-100">{item.name}</span>
                     {qty > 1 && <span className="text-xs text-parchment-300/60">×{qty}</span>}
-                    {equipped && <span className="text-[10px] text-moss-400">equipped</span>}
+                    {equippedBy.length > 0 && <span className="text-[10px] text-moss-400">equipped: {equippedBy.join(", ")}</span>}
                   </div>
                   <p className="truncate text-xs text-parchment-300/60">{item.desc}</p>
                 </div>
-                <div className="ml-2 shrink-0">
+                <div className="ml-2 flex shrink-0 gap-1">
                   {item.kind === "potion" && (
                     <button
                       className="ghost-btn !px-2 !py-1 text-xs"
                       disabled={!canUsePotions}
-                      onClick={() => onUsePotion(id)}
+                      onClick={() => onUsePotion(id, seat)}
                       title={canUsePotions ? "" : "Use potions during battle from the combat panel"}
                     >
                       Use
                     </button>
                   )}
-                  {equippable && !equipped && (
-                    <button className="ghost-btn !px-2 !py-1 text-xs" onClick={() => onEquip(id)}>
-                      Equip
+                  {equippable && !equippedHere && (
+                    <button className="ghost-btn !px-2 !py-1 text-xs" onClick={() => onEquip(id, seat)}>
+                      Equip{multi ? ` → ${c.name}` : ""}
                     </button>
                   )}
                 </div>

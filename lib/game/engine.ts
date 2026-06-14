@@ -1,4 +1,4 @@
-import type { GameState, Character, AbilityKey } from "./types";
+import type { GameState, Character, AbilityKey, InventorySlot } from "./types";
 import type { SceneContext } from "./scene";
 import { getScene, getCampaign, AI_ITEM_UNION, AI_ENEMY_UNION } from "./campaigns";
 import { spawnEnemy } from "./enemies";
@@ -7,6 +7,7 @@ import {
   removeFromInventory,
   hasItem,
   grantXp,
+  startingKit,
 } from "./character";
 import { abilityCheck, type CheckResult } from "./dice";
 import { getAbility, ITEMS } from "./content";
@@ -21,13 +22,28 @@ import type { AiAction, AiEffect } from "./dm";
 
 export const SAVE_VERSION = 2;
 
-export function newGame(character: Character, campaignId = "shattered"): GameState {
+export function newGame(party: Character[], campaignId = "shattered"): GameState {
   const campaign = getCampaign(campaignId);
+  const heroes = party.length ? party : [];
+
+  // Pool starting gold and non-equipped items into shared party resources.
+  const inventory: InventorySlot[] = [];
+  let gold = 0;
+  for (const hero of heroes) {
+    const kit = startingKit(hero.klass);
+    gold += kit.gold;
+    for (const id of kit.items) addToInventory(inventory, id, 1);
+  }
+
   const state: GameState = {
     version: SAVE_VERSION,
     campaignId: campaign.id,
     phase: "exploring",
-    character,
+    party: heroes,
+    gold,
+    inventory,
+    shards: 0,
+    turnPlayer: 0,
     sceneId: campaign.startScene,
     visited: [],
     flags: {},
@@ -35,9 +51,30 @@ export function newGame(character: Character, campaignId = "shattered"): GameSta
     combat: null,
     pendingChoiceLock: false,
   };
-  addLog(state, "system", `${character.name}'s legend begins.`);
+  const intro =
+    heroes.length > 1
+      ? `${heroes.map((h) => h.name).join(", ")} begin their legend together.`
+      : `${heroes[0]?.name ?? "A hero"}'s legend begins.`;
+  addLog(state, "system", intro);
   enterScene(state, campaign.startScene);
   return state;
+}
+
+// The hero currently making exploration decisions.
+function activeHero(state: GameState) {
+  return state.party[Math.min(state.turnPlayer, state.party.length - 1)] ?? state.party[0];
+}
+
+function livingSeats(state: GameState): number[] {
+  return state.party.map((c, i) => (c.hp > 0 ? i : -1)).filter((i) => i >= 0);
+}
+
+// Pass exploration control to the next living hero (no-op for a solo party).
+export function rotateTurn(state: GameState): void {
+  const living = livingSeats(state);
+  if (living.length <= 1) return;
+  const after = living.find((s) => s > state.turnPlayer);
+  state.turnPlayer = after ?? living[0];
 }
 
 // Builds the toolbox passed to scene/choice code. Mutates `state` directly.
@@ -52,13 +89,15 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       addLog(state, "system", text);
     },
     check: (ability: AbilityKey, dc: number, extra = 0): CheckResult => {
+      const hero = activeHero(state);
       // Elf keen senses helps perception-style (wis) checks a touch.
-      const elfBonus = state.character.race === "elf" && ability === "wis" ? 2 : 0;
-      const result = abilityCheck(state.character.abilities, ability, dc, extra + elfBonus);
+      const elfBonus = hero.race === "elf" && ability === "wis" ? 2 : 0;
+      const result = abilityCheck(hero.abilities, ability, dc, extra + elfBonus);
+      const tag = state.party.length > 1 ? `${hero.name}: ` : "";
       addLog(
         state,
         "roll",
-        `🎲 d20 (${result.d20}) ${result.mod >= 0 ? "+" : ""}${result.mod} = ${result.total} vs DC ${dc} — ${
+        `🎲 ${tag}d20 (${result.d20}) ${result.mod >= 0 ? "+" : ""}${result.mod} = ${result.total} vs DC ${dc} — ${
           result.success ? "SUCCESS" : "FAILURE"
         }${result.crit === "hit" ? " (natural 20!)" : result.crit === "miss" ? " (natural 1!)" : ""}`
       );
@@ -68,52 +107,74 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       ctx._navTarget = sceneId;
     },
     combat: (enemyIds, opts) => {
+      // A hero killed by pre-combat effects can't then be thrown into a fight.
+      if (state.phase === "gameover") return;
       const sc = opts.scale ?? 0;
       const enemies = enemyIds.map((id) => spawnEnemy(id, sc));
       state.combat = {
         enemies,
-        turn: 0,
+        round: 0,
+        acted: [],
         cooldowns: {},
-        buffs: [],
+        buffs: {},
+        luckUsed: {},
+        originSceneId: state.sceneId,
         returnSceneId: opts.onWin,
         fleeSceneId: opts.onFlee,
       };
       state.phase = "combat";
       if (opts.intro) addLog(state, "narration", opts.intro);
-      const names = enemies.map((e) => e.name).join(", ");
-      addLog(state, "combat", `⚔ Battle begins — ${names}.`);
+      addLog(state, "combat", `⚔ Battle begins — ${enemies.map((e) => e.name).join(", ")}.`);
     },
     give: (itemId, qty = 1) => {
-      addToInventory(state.character.inventory, itemId, qty);
+      addToInventory(state.inventory, itemId, qty);
     },
-    take: (itemId, qty = 1) => removeFromInventory(state.character.inventory, itemId, qty),
-    has: (itemId) => hasItem(state.character, itemId),
+    take: (itemId, qty = 1) => removeFromInventory(state.inventory, itemId, qty),
+    has: (itemId) => hasItem(state.inventory, itemId),
     gold: (delta) => {
-      state.character.gold = Math.max(0, state.character.gold + delta);
+      state.gold = Math.max(0, state.gold + delta);
     },
     heal: (amount) => {
-      state.character.hp = Math.min(state.character.maxHp, state.character.hp + amount);
+      const hero = activeHero(state);
+      hero.hp = Math.min(hero.maxHp, hero.hp + amount);
     },
     hurt: (amount) => {
-      state.character.hp = Math.max(0, state.character.hp - amount);
-      if (state.character.hp <= 0) {
-        addLog(state, "system", "Your wounds overcome you...");
+      const hero = activeHero(state);
+      hero.hp = Math.max(0, hero.hp - amount);
+      if (hero.hp <= 0) hero.downed = true;
+      if (livingSeats(state).length === 0) {
+        addLog(state, "system", "The party has fallen...");
         state.phase = "gameover";
       }
     },
     restoreMp: (amount) => {
-      state.character.mp = Math.min(state.character.maxMp, state.character.mp + amount);
+      const hero = activeHero(state);
+      hero.mp = Math.min(hero.maxMp, hero.mp + amount);
+    },
+    restParty: () => {
+      for (const c of state.party) {
+        c.hp = c.maxHp;
+        c.mp = c.maxMp;
+        c.downed = false;
+      }
     },
     addShard: () => {
-      state.character.shards += 1;
+      state.shards += 1;
     },
     xp: (amount) => {
-      const r = grantXp(state.character, amount);
-      addLog(state, "system", `You gain ${amount} experience.`);
-      if (r.leveled) {
-        addLog(state, "level", `⚜ You reach level ${r.newLevel}! (HP & Weave restored)`);
-        if (r.newAbility) addLog(state, "level", `New ability learned: ${getAbility(r.newAbility).name}.`);
+      const hasLumen = hasItem(state.inventory, "lumen_charm");
+      let leveledAny = false;
+      for (const hero of state.party) {
+        if (hero.hp <= 0) continue;
+        const r = grantXp(hero, amount, hasLumen);
+        if (r.leveled) {
+          leveledAny = true;
+          addLog(state, "level", `⚜ ${state.party.length > 1 ? hero.name : "You"} reach${state.party.length > 1 ? "es" : ""} level ${r.newLevel}!`);
+          if (r.newAbility) addLog(state, "level", `Learned ${getAbility(r.newAbility).name}.`);
+        }
       }
+      addLog(state, "system", `${state.party.length > 1 ? "The party gains" : "You gain"} ${amount} experience.`);
+      void leveledAny;
     },
     setFlag: (key, value = true) => {
       state.flags[key] = value;
@@ -171,6 +232,8 @@ export function chooseOption(prev: GameState, choiceId: string): GameState {
 
   if (state.phase === "exploring" && ctx._navTarget) {
     enterScene(state, ctx._navTarget);
+    // Co-op: pass exploration control to the next hero on each new scene.
+    rotateTurn(state);
   }
 
   return state;
@@ -182,6 +245,7 @@ function resolveAfterCombat(state: GameState): void {
   // If combat ended in a win or flee, narrate the destination scene.
   if (state.phase === "exploring" && state.combat === null) {
     enterScene(state, state.sceneId);
+    rotateTurn(state);
   }
 }
 
@@ -248,37 +312,41 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
     const eff = raw as AiEffect;
     if (!eff || typeof eff.type !== "string") continue;
 
+    const hero = activeHero(state);
+    const nm = state.party.length > 1 ? hero.name : "You";
     if (eff.type === "heal") {
       const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
-      state.character.hp = Math.min(state.character.maxHp, state.character.hp + amt);
-      addLog(state, "system", `(+${amt} HP)`);
+      hero.hp = Math.min(hero.maxHp, hero.hp + amt);
+      addLog(state, "system", `${nm} (+${amt} HP)`);
     } else if (eff.type === "hurt") {
       const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
-      state.character.hp = Math.max(0, state.character.hp - amt);
-      addLog(state, "combat", `(-${amt} HP)`);
-      if (state.character.hp <= 0) {
-        addLog(state, "system", "Your wounds overcome you...");
+      hero.hp = Math.max(0, hero.hp - amt);
+      if (hero.hp <= 0) hero.downed = true;
+      addLog(state, "combat", `${nm} (-${amt} HP)`);
+      if (livingSeats(state).length === 0) {
+        addLog(state, "system", "The party has fallen...");
         state.phase = "gameover";
         return state;
       }
     } else if (eff.type === "gold") {
       const amt = clampInt((eff as { amount?: number }).amount, -15, 15);
-      state.character.gold = Math.max(0, state.character.gold + amt);
+      state.gold = Math.max(0, state.gold + amt);
       addLog(state, "loot", amt >= 0 ? `(+${amt} gold)` : `(${amt} gold)`);
     } else if (eff.type === "xp") {
       const amt = clampInt((eff as { amount?: number }).amount, 0, 25);
       if (amt > 0) {
-        const r = grantXp(state.character, amt);
-        addLog(state, "system", `(+${amt} XP)`);
+        const hasLumen = hasItem(state.inventory, "lumen_charm");
+        const r = grantXp(hero, amt, hasLumen);
+        addLog(state, "system", `${nm} (+${amt} XP)`);
         if (r.leveled) {
-          addLog(state, "level", `⚜ You reach level ${r.newLevel}! (HP & Weave restored)`);
-          if (r.newAbility) addLog(state, "level", `New ability learned: ${getAbility(r.newAbility).name}.`);
+          addLog(state, "level", `⚜ ${nm} reach${state.party.length > 1 ? "es" : ""} level ${r.newLevel}!`);
+          if (r.newAbility) addLog(state, "level", `Learned ${getAbility(r.newAbility).name}.`);
         }
       }
     } else if (eff.type === "item") {
       const id = (eff as { id?: string }).id ?? "";
       if (AI_ITEM_UNION.includes(id)) {
-        addToInventory(state.character.inventory, id, 1);
+        addToInventory(state.inventory, id, 1);
         addLog(state, "loot", `Found: ${ITEMS[id].name}.`);
       }
     } else if (eff.type === "combat") {
@@ -287,12 +355,15 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
         : [];
       const valid = ids.filter((e) => AI_ENEMY_UNION.includes(e)).slice(0, 2);
       if (valid.length) {
-        const sc = Math.max(0, state.character.level - 1);
+        const sc = Math.max(0, hero.level - 1);
         state.combat = {
           enemies: valid.map((id) => spawnEnemy(id, sc)),
-          turn: 0,
+          round: 0,
+          acted: [],
           cooldowns: {},
-          buffs: [],
+          buffs: {},
+          luckUsed: {},
+          originSceneId: state.sceneId,
           returnSceneId: state.sceneId,
         };
         state.phase = "combat";
@@ -306,38 +377,41 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
   return state;
 }
 
-// Equip a weapon or armor the hero is carrying.
-export function equipItem(prev: GameState, itemId: string): GameState {
+// Equip a weapon or armor from the shared stash onto a specific hero.
+export function equipItem(prev: GameState, itemId: string, seat = 0): GameState {
   const state = clone(prev);
   const item = ITEMS[itemId];
-  if (!item) return state;
-  if (!hasItem(state.character, itemId)) return state;
+  const hero = state.party[seat];
+  if (!item || !hero) return state;
+  if (!hasItem(state.inventory, itemId)) return state;
   if (item.kind === "weapon") {
-    state.character.equippedWeapon = itemId;
-    addLog(state, "system", `You ready the ${item.name}.`);
+    hero.equippedWeapon = itemId;
+    addLog(state, "system", `${state.party.length > 1 ? hero.name + " readies" : "You ready"} the ${item.name}.`);
   } else if (item.kind === "armor") {
-    state.character.equippedArmor = itemId;
-    addLog(state, "system", `You don the ${item.name}.`);
+    hero.equippedArmor = itemId;
+    addLog(state, "system", `${state.party.length > 1 ? hero.name + " dons" : "You don"} the ${item.name}.`);
   }
   return state;
 }
 
-// Player consumes a potion outside of battle.
-export function useItemExploring(prev: GameState, itemId: string): GameState {
+// A specific hero consumes a potion from the shared stash outside of battle.
+export function useItemExploring(prev: GameState, itemId: string, seat = 0): GameState {
   const state = clone(prev);
-  const inv = state.character.inventory;
+  const inv = state.inventory;
   const slot = inv.find((s) => s.itemId === itemId);
-  if (!slot) return state;
+  const hero = state.party[seat];
+  if (!slot || !hero) return state;
   const item = ITEMS[itemId];
   if (!item || item.kind !== "potion") return state;
+  const nm = state.party.length > 1 ? hero.name : "You";
 
   if (item.heal) {
-    state.character.hp = Math.min(state.character.maxHp, state.character.hp + item.heal);
-    addLog(state, "system", `You drink the ${item.name}. (+${item.heal} HP)`);
+    hero.hp = Math.min(hero.maxHp, hero.hp + item.heal);
+    addLog(state, "system", `${nm} drink${state.party.length > 1 ? "s" : ""} the ${item.name}. (+${item.heal} HP)`);
   }
   if (item.restoreMp) {
-    state.character.mp = Math.min(state.character.maxMp, state.character.mp + item.restoreMp);
-    addLog(state, "system", `You drink the ${item.name}. (+${item.restoreMp} Weave)`);
+    hero.mp = Math.min(hero.maxMp, hero.mp + item.restoreMp);
+    addLog(state, "system", `${nm} drink${state.party.length > 1 ? "s" : ""} the ${item.name}. (+${item.restoreMp} Weave)`);
   }
   removeFromInventory(inv, itemId, 1);
   return state;

@@ -7,7 +7,7 @@ import { pick, chance, rollRange } from "./dice";
 // the surface is gone, and the only way out is down. Original homage; not based
 // on any specific property.
 
-const scale = (s: GameState) => Math.max(0, s.character.level - 1);
+const scale = (s: GameState) => Math.max(0, Math.max(...s.party.map((c) => c.level)) - 1);
 
 function go(id: string, label: string, target: string, hint?: string): Choice {
   return { id, label, hint, run: (ctx) => ctx.goto(target) };
@@ -46,12 +46,16 @@ const SCENE_LIST: Scene[] = [
     title: "Patch Notes: The Apocalypse",
     region: "The Surface (formerly)",
     text: (s) => {
-      const klass = CLASSES[s.character.klass].name;
-      const race = RACES[s.character.race].name;
+      const lead = s.party[0];
+      const klass = CLASSES[lead.klass].name;
+      const race = RACES[lead.race].name;
+      const assign = s.party.length > 1
+        ? `A glowing menu drafts your whole crew — ${s.party.map((c) => c.name).join(", ") } — as CRAWLERS, a team the System finds "marketable."`
+        : `A glowing menu assigns you, ${lead.name}, the role of CRAWLER — a ${race} ${klass}, apparently, because the System read your soul and made some assumptions.`;
       return [
         `The buildings went first — folded into the ground like a magician's trick, except the magician hated you specifically. Then a voice the size of the sky cleared its throat.`,
         `"GREETINGS, SURVIVOR. Earth has been condemned for redevelopment. The good news: there's a dungeon. The better news: it's monetized."`,
-        `A glowing menu assigns you, ${s.character.name}, the role of CRAWLER — a ${race} ${klass}, apparently, because the System read your soul and made some assumptions.`,
+        assign,
         `The floor opens beneath you. Down you go.`,
       ];
     },
@@ -113,15 +117,15 @@ const SCENE_LIST: Scene[] = [
     title: "Safe Room — The Black Market",
     region: "The Dungeon · Floor 1",
     text: (s) => [
-      `A grimy terminal blinks BLACK MARKET in a font that screams "trust me." Beans hops onto the counter. "Buy stuff. Don't read the fine print, it's load-bearing." You have ${s.character.gold} gold. Crowd Favor: ${favor(s)}.`,
+      `A grimy terminal blinks BLACK MARKET in a font that screams "trust me." Beans hops onto the counter. "Buy stuff. Don't read the fine print, it's load-bearing." You have ${s.gold} gold. Crowd Favor: ${favor(s)}.`,
     ],
     choices: () => {
       const buy = (id: string, itemId: string, cost: number, label: string): Choice => ({
         id,
         label: `Buy ${label} — ${cost}g`,
-        enabled: (s) => s.character.gold >= cost,
+        enabled: (s) => s.gold >= cost,
         run: (ctx) => {
-          if (ctx.state.character.gold < cost) return;
+          if (ctx.state.gold < cost) return;
           ctx.gold(-cost);
           ctx.give(itemId, 1);
           ctx.say(`Purchased: ${label}.`);
@@ -138,10 +142,9 @@ const SCENE_LIST: Scene[] = [
         {
           id: "dc_rest1",
           label: "Nap in the safe room (full HP & mana)",
-          enabled: (s) => s.character.hp < s.character.maxHp || s.character.mp < s.character.maxMp,
+          enabled: (s) => s.party.some((c) => c.hp < c.maxHp || c.mp < c.maxMp),
           run: (ctx) => {
-            ctx.heal(9999);
-            ctx.restoreMp(9999);
+            ctx.restParty();
             ctx.log(`You sleep on a beanbag of dubious origin. Beans keeps watch, allegedly.`);
           },
         },
@@ -317,15 +320,15 @@ const SCENE_LIST: Scene[] = [
     title: "Safe Room — Premium Black Market",
     region: "The Dungeon · Floor 2",
     text: (s) => [
-      `Same terminal, fancier font. "WELCOME BACK, VALUED CRAWLER." You have ${s.character.gold} gold.`,
+      `Same terminal, fancier font. "WELCOME BACK, VALUED CRAWLER." You have ${s.gold} gold.`,
     ],
     choices: () => {
       const buy = (id: string, itemId: string, cost: number, label: string): Choice => ({
         id,
         label: `Buy ${label} — ${cost}g`,
-        enabled: (s) => s.character.gold >= cost,
+        enabled: (s) => s.gold >= cost,
         run: (ctx) => {
-          if (ctx.state.character.gold < cost) return;
+          if (ctx.state.gold < cost) return;
           ctx.gold(-cost);
           ctx.give(itemId, 1);
           ctx.say(`Purchased: ${label}.`);
@@ -340,10 +343,9 @@ const SCENE_LIST: Scene[] = [
         {
           id: "dc_rest2",
           label: "Rest (full HP & mana)",
-          enabled: (s) => s.character.hp < s.character.maxHp || s.character.mp < s.character.maxMp,
+          enabled: (s) => s.party.some((c) => c.hp < c.maxHp || c.mp < c.maxMp),
           run: (ctx) => {
-            ctx.heal(9999);
-            ctx.restoreMp(9999);
+            ctx.restParty();
             ctx.log(`You rest. The ads keep playing. You dream in jingles.`);
           },
         },

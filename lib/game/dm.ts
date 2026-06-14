@@ -21,8 +21,14 @@ export interface AiAction {
 }
 
 function heroSummary(s: GameState): string {
-  const c = s.character;
-  return `${c.name}, a level ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name} (HP ${c.hp}/${c.maxHp}, Weave ${c.mp}/${c.maxMp}, ${c.shards}/3 Shards of Aethyr)`;
+  const active = s.party[Math.min(s.turnPlayer, s.party.length - 1)] ?? s.party[0];
+  const roster = s.party
+    .map((c) => `${c.name} (Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name}, HP ${c.hp}/${c.maxHp}${c.hp <= 0 ? ", DOWNED" : ""})`)
+    .join("; ");
+  if (s.party.length === 1) {
+    return `${roster}. Gold ${s.gold}, ${s.shards}/3 Shards of Aethyr.`;
+  }
+  return `Party of ${s.party.length}: ${roster}. Acting hero: ${active.name}. Shared gold ${s.gold}, ${s.shards}/3 Shards.`;
 }
 
 function recentNarration(s: GameState, n = 4): string {

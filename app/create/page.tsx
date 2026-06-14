@@ -21,58 +21,78 @@ import {
   applyRaceBonuses,
   createCharacter,
   maxHpFor,
-  maxMpFor,
 } from "@/lib/game/character";
 import { abilityMod, modString } from "@/lib/game/dice";
 import { newGame } from "@/lib/game/engine";
 import { saveGame } from "@/lib/game/save";
 import { CAMPAIGNS } from "@/lib/game/campaigns";
 
+interface Draft {
+  name: string;
+  race: RaceId;
+  klass: ClassId;
+  scores: Abilities;
+}
+
+function newDraft(): Draft {
+  return { name: "", race: "human", klass: "warrior", scores: defaultPointBuy() };
+}
+
 export default function CreatePage() {
   const router = useRouter();
   const [campaignId, setCampaignId] = useState(CAMPAIGNS[0].id);
-  const [name, setName] = useState("");
-  const [race, setRace] = useState<RaceId>("human");
-  const [klass, setKlass] = useState<ClassId>("warrior");
-  const [scores, setScores] = useState<Abilities>(defaultPointBuy);
+  const [drafts, setDrafts] = useState<Draft[]>([newDraft()]);
+  const [active, setActive] = useState(0);
 
-  const spent = totalSpent(scores);
+  const d = drafts[active];
+  const spent = totalSpent(d.scores);
   const remaining = POINT_BUY_TOTAL - spent;
+  const finalScores = useMemo(() => applyRaceBonuses(d.scores, d.race), [d.scores, d.race]);
+  const previewHp = maxHpFor(d.klass, finalScores.con, 1, false);
 
-  const finalScores = useMemo(() => applyRaceBonuses(scores, race), [scores, race]);
-  const previewHp = maxHpFor(klass, finalScores.con, 1, false);
-  const previewMp = maxMpFor(klass, finalScores[CLASSES[klass].primary], 1);
+  function patch(p: Partial<Draft>) {
+    setDrafts((prev) => prev.map((x, i) => (i === active ? { ...x, ...p } : x)));
+  }
+
+  function setPlayerCount(n: number) {
+    setDrafts((prev) => {
+      const next = [...prev];
+      while (next.length < n) next.push(newDraft());
+      next.length = n;
+      return next;
+    });
+    setActive((a) => Math.min(a, n - 1));
+  }
 
   function adjust(key: AbilityKey, delta: number) {
-    setScores((prev) => {
-      const next = { ...prev };
-      const target = next[key] + delta;
-      if (target < POINT_BUY_MIN || target > POINT_BUY_MAX) return prev;
-      const trial = { ...next, [key]: target };
-      if (totalSpent(trial) > POINT_BUY_TOTAL) return prev;
-      return trial;
-    });
+    const target = d.scores[key] + delta;
+    if (target < POINT_BUY_MIN || target > POINT_BUY_MAX) return;
+    const trial = { ...d.scores, [key]: target };
+    if (totalSpent(trial) > POINT_BUY_TOTAL) return;
+    patch({ scores: trial });
   }
 
   function begin() {
-    const character = createCharacter({
-      name: name.trim() || "Wanderer",
-      race,
-      klass,
-      abilities: scores,
-    });
-    const game = newGame(character, campaignId);
+    const party = drafts.map((draft, i) =>
+      createCharacter({
+        name: draft.name.trim() || `Hero ${i + 1}`,
+        race: draft.race,
+        klass: draft.klass,
+        abilities: draft.scores,
+      })
+    );
+    const game = newGame(party, campaignId);
     saveGame(game);
     router.push("/play");
   }
 
+  const partySize = drafts.length;
+
   return (
     <main className="mx-auto max-w-5xl px-5 py-10">
       <div className="mb-8 flex items-center justify-between">
-        <Link href="/" className="ghost-btn">
-          ← Back
-        </Link>
-        <h1 className="font-display text-3xl text-gold-400 sm:text-4xl">Forge Your Hero</h1>
+        <Link href="/" className="ghost-btn">← Back</Link>
+        <h1 className="font-display text-3xl text-gold-400 sm:text-4xl">Forge Your Party</h1>
         <div className="w-20" />
       </div>
 
@@ -87,9 +107,7 @@ export default function CreatePage() {
                 key={c.id}
                 onClick={() => setCampaignId(c.id)}
                 className={`rounded-md border px-4 py-3 text-left transition ${
-                  selected
-                    ? "border-gold-400 bg-ink-600/60 shadow-glow"
-                    : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
+                  selected ? "border-gold-400 bg-ink-600/60 shadow-glow" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
                 }`}
               >
                 <div className="font-display text-parchment-100">{c.title}</div>
@@ -99,21 +117,63 @@ export default function CreatePage() {
             );
           })}
         </div>
-        <p className="mt-3 text-xs text-parchment-300/50">
-          Both adventures share the same hero system — your lineage, calling, and abilities carry over.
-        </p>
       </section>
 
-      {/* Name */}
+      {/* Players (local pass-and-play) */}
+      <section className="rune-card mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl text-gold-400">Players (Pass &amp; Play)</h2>
+            <p className="mt-1 text-sm text-parchment-200/70">
+              Up to 4 heroes on one device — pass it around as turns change. For online play with room
+              codes, use{" "}
+              <Link href="/online" className="text-gold-400 underline">Online Co-op</Link>.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {[1, 2, 3, 4].map((n) => (
+              <button
+                key={n}
+                onClick={() => setPlayerCount(n)}
+                className={`h-9 w-9 rounded-md border font-display transition ${
+                  partySize === n ? "border-gold-400 bg-ink-600/60 text-gold-300" : "border-gold-400/20 bg-ink-700/40 text-parchment-200/80"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {partySize > 1 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {drafts.map((dr, i) => (
+              <button
+                key={i}
+                onClick={() => setActive(i)}
+                className={`rounded-md border px-3 py-1.5 text-sm font-display transition ${
+                  i === active ? "border-gold-400 bg-ink-600/60 text-gold-300" : "border-gold-400/20 bg-ink-700/40 text-parchment-200/80"
+                }`}
+              >
+                {dr.name.trim() || `Player ${i + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Hero editor for the active player */}
       <section className="rune-card mb-6">
         <label className="block">
-          <span className="mb-1 block font-display tracking-wider text-gold-400">Name</span>
+          <span className="mb-1 block font-display tracking-wider text-gold-400">
+            {partySize > 1 ? `Player ${active + 1} — Name` : "Name"}
+          </span>
           <input
             className="input max-w-sm"
-            value={name}
-            placeholder="Wanderer"
+            value={d.name}
+            placeholder={`Hero ${active + 1}`}
             maxLength={24}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => patch({ name: e.target.value })}
           />
         </label>
       </section>
@@ -125,23 +185,19 @@ export default function CreatePage() {
           <div className="space-y-2">
             {(Object.keys(RACES) as RaceId[]).map((id) => {
               const r = RACES[id];
-              const selected = race === id;
+              const selected = d.race === id;
               return (
                 <button
                   key={id}
-                  onClick={() => setRace(id)}
+                  onClick={() => patch({ race: id })}
                   className={`w-full rounded-md border px-4 py-3 text-left transition ${
-                    selected
-                      ? "border-gold-400 bg-ink-600/60 shadow-glow"
-                      : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
+                    selected ? "border-gold-400 bg-ink-600/60 shadow-glow" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-parchment-100">{r.name}</span>
                     <span className="text-xs text-gold-400/80">
-                      {Object.entries(r.bonuses)
-                        .map(([k, v]) => `+${v} ${k.toUpperCase()}`)
-                        .join(" ")}
+                      {Object.entries(r.bonuses).map(([k, v]) => `+${v} ${k.toUpperCase()}`).join(" ")}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-parchment-200/70">{r.blurb}</p>
@@ -158,22 +214,18 @@ export default function CreatePage() {
           <div className="space-y-2">
             {(Object.keys(CLASSES) as ClassId[]).map((id) => {
               const c = CLASSES[id];
-              const selected = klass === id;
+              const selected = d.klass === id;
               return (
                 <button
                   key={id}
-                  onClick={() => setKlass(id)}
+                  onClick={() => patch({ klass: id })}
                   className={`w-full rounded-md border px-4 py-3 text-left transition ${
-                    selected
-                      ? "border-gold-400 bg-ink-600/60 shadow-glow"
-                      : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
+                    selected ? "border-gold-400 bg-ink-600/60 shadow-glow" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-display text-parchment-100">{c.name}</span>
-                    <span className="text-xs text-gold-400/80">
-                      Primary: {ABILITY_NAMES[c.primary]}
-                    </span>
+                    <span className="text-xs text-gold-400/80">Primary: {ABILITY_NAMES[c.primary]}</span>
                   </div>
                   <p className="mt-1 text-sm text-parchment-200/70">{c.blurb}</p>
                 </button>
@@ -187,19 +239,13 @@ export default function CreatePage() {
       <section className="rune-card mt-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-xl text-gold-400">Abilities</h2>
-          <span
-            className={`rounded-md border px-3 py-1 text-sm ${
-              remaining === 0
-                ? "border-moss-400/40 text-moss-400"
-                : "border-gold-400/40 text-gold-400"
-            }`}
-          >
+          <span className={`rounded-md border px-3 py-1 text-sm ${remaining === 0 ? "border-moss-400/40 text-moss-400" : "border-gold-400/40 text-gold-400"}`}>
             {remaining} points left
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {ABILITY_KEYS.map((key) => {
-            const base = scores[key];
+            const base = d.scores[key];
             const bonus = finalScores[key] - base;
             return (
               <div key={key} className="rune-panel">
@@ -208,38 +254,26 @@ export default function CreatePage() {
                   <span className="text-xs text-gold-400/70">{modString(abilityMod(finalScores[key]))}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => adjust(key, -1)}
-                    disabled={base <= POINT_BUY_MIN}
-                    className="ghost-btn h-8 w-8 !px-0 text-lg"
-                  >
-                    −
-                  </button>
+                  <button onClick={() => adjust(key, -1)} disabled={base <= POINT_BUY_MIN} className="ghost-btn h-8 w-8 !px-0 text-lg">−</button>
                   <span className="font-display text-xl text-gold-400">
                     {finalScores[key]}
                     {bonus > 0 && <span className="ml-1 text-xs text-moss-400">({base}+{bonus})</span>}
                   </span>
-                  <button
-                    onClick={() => adjust(key, +1)}
-                    disabled={base >= POINT_BUY_MAX || remaining <= 0}
-                    className="ghost-btn h-8 w-8 !px-0 text-lg"
-                  >
-                    +
-                  </button>
+                  <button onClick={() => adjust(key, +1)} disabled={base >= POINT_BUY_MAX || remaining <= 0} className="ghost-btn h-8 w-8 !px-0 text-lg">+</button>
                 </div>
               </div>
             );
           })}
         </div>
         <p className="mt-4 text-sm text-parchment-300/60">
-          Starting vitals: <span className="text-ember-400">HP {previewHp}</span> ·{" "}
-          <span className="text-arcane-400">Weave {previewMp}</span> · Gold {CLASSES[klass].startingGold}
+          {partySize > 1 ? `Player ${active + 1} vitals` : "Starting vitals"}:{" "}
+          <span className="text-ember-400">HP {previewHp}</span> · Gold pooled across the party
         </p>
       </section>
 
       <div className="mt-8 flex justify-center">
         <button onClick={begin} className="gold-btn px-10 text-lg">
-          Begin Your Legend ⚜
+          {partySize > 1 ? `Begin with ${partySize} Heroes ⚜` : "Begin Your Legend ⚜"}
         </button>
       </div>
     </main>
