@@ -258,6 +258,7 @@ const PROGRESSION: Record<ClassId, Record<number, string>> = {
   paladin: { 3: "rally", 5: "smite" },
   druid: { 3: "frost_nova", 5: "mend" },
   monk: { 3: "stunning_strike", 5: "smoke_bomb" },
+  necromancer: { 3: "bone_armor", 5: "raise_fallen" },
 };
 
 export function grantXp(char: Character, amount: number, hasLumen = false, gear: ItemInstance[] = []): LevelUpResult {

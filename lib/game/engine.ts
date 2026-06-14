@@ -28,7 +28,17 @@ import {
 } from "./combat";
 import type { AiAction, AiEffect } from "./dm";
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
+
+const TIME_PHASES = ["dawn", "day", "dusk", "night"] as const;
+
+// Advance the clock one step as the party travels; wraps into the next day.
+export function advanceTime(state: GameState): void {
+  const i = TIME_PHASES.indexOf(state.time.phase);
+  const next = (i + 1) % TIME_PHASES.length;
+  state.time.phase = TIME_PHASES[next];
+  if (next === 0) state.time.day += 1;
+}
 
 const EQUIPPABLE_KINDS = new Set(["weapon", "armor", "ring", "amulet"]);
 function isEquippable(itemId: string): boolean {
@@ -80,6 +90,8 @@ export function newGame(party: Character[], campaignId = "shattered"): GameState
     gear,
     shards: 0,
     turnPlayer: 0,
+    time: { day: 1, phase: "dawn" },
+    dailyUsed: {},
     sceneId: campaign.startScene,
     visited: [],
     flags: {},
@@ -209,6 +221,11 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
         c.mp = effectiveMaxMp(c, state.gear);
         c.downed = false;
       }
+      // A rest is a new day: refresh day-cooldowns and the daily loot box.
+      state.time = { day: state.time.day + 1, phase: "dawn" };
+      state.dailyUsed = {};
+      state.flags.box1_used = false;
+      state.flags.box2_used = false;
     },
     addShard: () => {
       state.shards += 1;
@@ -284,6 +301,7 @@ export function chooseOption(prev: GameState, choiceId: string): GameState {
 
   if (state.phase === "exploring" && ctx._navTarget) {
     enterScene(state, ctx._navTarget);
+    advanceTime(state);
     // Co-op: pass exploration control to the next hero on each new scene.
     rotateTurn(state);
   }

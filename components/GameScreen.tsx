@@ -174,7 +174,12 @@ export default function GameScreen({
     <main className="mx-auto flex h-[100dvh] max-w-3xl flex-col gap-3 px-4 py-4">
       <div className="relative flex items-center justify-between gap-2">
         <button onClick={handlers.onExit} className="ghost-btn !px-3 text-sm">{exitLabel}</button>
-        <span className="truncate font-display text-sm text-gold-400/80">{scene.title}</span>
+        <span className="min-w-0 truncate text-center font-display text-sm text-gold-400/80">
+          {scene.title}
+          <span className="ml-2 text-[11px] text-parchment-300/50">
+            {{ dawn: "🌅", day: "☀️", dusk: "🌆", night: "🌙" }[state.time.phase]} Day {state.time.day}
+          </span>
+        </span>
         <div className="flex items-center gap-2">
           <button onClick={() => setSettingsOpen((o) => !o)} className="ghost-btn !px-3 text-sm" title="Settings">⚙</button>
           <button onClick={() => setSheetOpen(true)} className="ghost-btn !px-3 text-sm">Party</button>

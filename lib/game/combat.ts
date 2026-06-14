@@ -164,6 +164,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
   const name = who(state, seat);
   const cds = (state.combat.cooldowns[seat] ??= {});
 
+  const dayKey = `${seat}:${abilityId}`;
   if (!char.abilityIds.includes(abilityId)) return false;
   if (char.mp < ability.mpCost) {
     addLog(state, "system", `${name} hasn't the Weave for ${ability.name}.`);
@@ -173,9 +174,14 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
     addLog(state, "system", `${ability.name} is still recovering.`);
     return false;
   }
+  if (ability.dayCooldown && state.dailyUsed[dayKey] === state.time.day) {
+    addLog(state, "system", `${ability.name} has already been used today — rest to renew it.`);
+    return false;
+  }
 
   char.mp -= ability.mpCost;
   cds[abilityId] = ability.cooldown + 1;
+  if (ability.dayCooldown) state.dailyUsed[dayKey] = state.time.day;
 
   const scaleMod = ability.scalesWith ? Math.max(0, abilityMod(char.abilities[ability.scalesWith])) : 0;
   const eff = ability.effect;
@@ -194,6 +200,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
       // Refund the cast — nothing to revive.
       char.mp += ability.mpCost;
       cds[abilityId] = 0;
+      if (ability.dayCooldown) delete state.dailyUsed[dayKey];
       return false;
     }
     t.downed = false;

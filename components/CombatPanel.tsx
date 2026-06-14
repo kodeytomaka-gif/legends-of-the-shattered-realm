@@ -30,6 +30,7 @@ export default function CombatPanel({
 }) {
   const combat = state.combat;
   const [target, setTarget] = useState(0);
+  const [allyPick, setAllyPick] = useState<string | null>(null);
 
   useEffect(() => {
     if (!combat) return;
@@ -109,6 +110,34 @@ export default function CombatPanel({
         })}
       </div>
 
+      {/* Ally target picker (e.g., Raise the Fallen) */}
+      {allyPick && (
+        <div className="rounded-md border border-arcane-400/40 bg-ink-700/50 p-2">
+          <p className="mb-1.5 text-center text-xs font-display text-arcane-400">
+            {ABILITIES[allyPick]?.name}: choose a target
+          </p>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {state.party.map((h, i) => {
+              const reviveAbility = ABILITIES[allyPick]?.effect.type === "revive";
+              const valid = reviveAbility ? h.hp <= 0 : h.hp > 0;
+              return (
+                <button
+                  key={i}
+                  disabled={!valid}
+                  className={`rounded border px-2 py-1 text-xs font-display transition ${valid ? "border-arcane-400/60 bg-ink-600/50 text-parchment-100" : "border-ink-600 text-parchment-300/40"}`}
+                  onClick={() => { onAbility(allyPick, i); setAllyPick(null); }}
+                >
+                  {h.name}{h.hp <= 0 ? " 💀" : ""}
+                </button>
+              );
+            })}
+            <button className="rounded border border-ember-400/40 px-2 py-1 text-xs text-ember-400" onClick={() => setAllyPick(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Current hero's actions */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <button className="gold-btn" disabled={off} onClick={() => onAttack(target)}>
@@ -120,16 +149,19 @@ export default function CombatPanel({
           if (!a) return null;
           const cd = cooldowns[id] ?? 0;
           const tooExpensive = hero.mp < a.mpCost;
+          const usedToday = !!a.dayCooldown && state.dailyUsed[`${seat}:${id}`] === state.time.day;
           return (
             <button
               key={id}
               className="ghost-btn flex-col !items-start !py-1.5 text-left"
-              disabled={off || cd > 0 || tooExpensive}
+              disabled={off || cd > 0 || tooExpensive || usedToday}
               title={a.desc}
-              onClick={() => onAbility(id, target)}
+              onClick={() => (a.target === "ally" ? setAllyPick(id) : onAbility(id, target))}
             >
               <span className="text-sm">{a.name}</span>
-              <span className="text-[10px] text-arcane-400/80">{a.mpCost} Weave{cd > 0 ? ` · CD ${cd}` : ""}</span>
+              <span className="text-[10px] text-arcane-400/80">
+                {a.mpCost} Weave{cd > 0 ? ` · CD ${cd}` : ""}{usedToday ? " · used today" : a.dayCooldown ? " · 1/day" : ""}
+              </span>
             </button>
           );
         })}

@@ -25,7 +25,8 @@ export type ClassId =
   | "bard"
   | "paladin"
   | "druid"
-  | "monk";
+  | "monk"
+  | "necromancer";
 
 export interface SubclassDef {
   id: string;
@@ -230,6 +231,10 @@ export interface GameState {
   shards: number; // Shards of Aethyr collected (campaign 1)
   // Whose turn it is to make exploration decisions (seat index).
   turnPlayer: number;
+  // In-game clock: phase advances as you travel; resting advances the day.
+  time: { day: number; phase: "dawn" | "day" | "dusk" | "night" };
+  // Day-based ability cooldowns: key `${seat}:${abilityId}` -> day last used.
+  dailyUsed: Record<string, number>;
   sceneId: string;
   visited: string[];
   flags: Record<string, boolean | number | string>;

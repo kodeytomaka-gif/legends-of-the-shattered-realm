@@ -157,6 +157,18 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     startingItems: ["oak_staff", "leather_armor", "potion_minor", "potion_minor"],
     startingGold: 20,
   },
+  necromancer: {
+    id: "necromancer",
+    name: "Necromancer",
+    blurb: "A scholar of death who drains the living and drags the fallen back to their feet.",
+    primary: "int",
+    hitDie: 6,
+    baseHp: 9,
+    baseMp: 14,
+    startingAbilities: ["bone_spear", "life_drain"],
+    startingItems: ["oak_staff", "robes", "potion_minor", "potion_mana"],
+    startingGold: 25,
+  },
 };
 
 // Subclasses — pick one at creation; it grants a signature ability.
@@ -196,6 +208,10 @@ export const SUBCLASSES: Record<ClassId, SubclassDef[]> = {
   monk: [
     { id: "open_hand", name: "Way of the Open Hand", blurb: "Precise, paralyzing strikes.", grantsAbility: "stunning_strike" },
     { id: "tempest", name: "Way of the Tempest", blurb: "A storm of fists no foe can weather.", grantsAbility: "flurry" },
+  ],
+  necromancer: [
+    { id: "bone_lord", name: "Bone Lord", blurb: "Wards of bone and a battlefield raised again.", grantsAbility: "raise_fallen" },
+    { id: "lich", name: "Lich Acolyte", blurb: "Death magic that scours whole ranks.", grantsAbility: "corpse_blast" },
   ],
 };
 
@@ -406,6 +422,33 @@ export const ABILITIES: Record<string, AbilityDef> = {
     id: "stunning_strike", name: "Stunning Strike", desc: "A precise nerve strike. 2d6 + DEX damage; may stun.",
     mpCost: 3, cooldown: 3, target: "enemy",
     effect: { type: "damage", dice: [2, 6], applies: { type: "stun", turns: 1, magnitude: 0 } }, scalesWith: "dex",
+  },
+
+  // ── Necromancer ──
+  bone_spear: {
+    id: "bone_spear", name: "Bone Spear", desc: "A shard of bone, hurled. 2d6 + INT damage.",
+    mpCost: 3, cooldown: 0, target: "enemy",
+    effect: { type: "damage", dice: [2, 6] }, scalesWith: "int",
+  },
+  life_drain: {
+    id: "life_drain", name: "Life Drain", desc: "Siphon vitality. Deal 14 and heal half.",
+    mpCost: 4, cooldown: 2, target: "enemy",
+    effect: { type: "drain", amount: 14 },
+  },
+  raise_fallen: {
+    id: "raise_fallen", name: "Raise the Fallen", desc: "Drag a downed ally back to their feet (24 HP). Once per day.",
+    mpCost: 8, cooldown: 0, target: "ally",
+    effect: { type: "revive", amount: 24 }, dayCooldown: 1,
+  },
+  bone_armor: {
+    id: "bone_armor", name: "Bone Armor", desc: "A lattice of bone. +4 armor for 3 turns.",
+    mpCost: 3, cooldown: 4, target: "self",
+    effect: { type: "buff", stat: "ac", amount: 4, turns: 3 },
+  },
+  corpse_blast: {
+    id: "corpse_blast", name: "Corpse Blast", desc: "Detonate necrotic energy. 2d6 + INT to ALL enemies.",
+    mpCost: 5, cooldown: 3, target: "all-enemies",
+    effect: { type: "damage", dice: [2, 6], element: "necrotic" }, scalesWith: "int",
   },
 };
 
