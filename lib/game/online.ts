@@ -36,7 +36,7 @@ export type GameAction =
   | { kind: "item"; id: string }
   | { kind: "flee" }
   | { kind: "useItem"; itemId: string; seat: number }
-  | { kind: "equip"; itemId: string; seat: number };
+  | { kind: "equip"; uid: string; seat: number };
 
 const ID_KEY = "lotsr_player_id";
 const NAME_KEY = "lotsr_player_name";

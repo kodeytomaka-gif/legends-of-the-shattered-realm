@@ -64,7 +64,7 @@ type GameAction =
   | { kind: "item"; id: string }
   | { kind: "flee" }
   | { kind: "useItem"; itemId: string; seat: number }
-  | { kind: "equip"; itemId: string; seat: number };
+  | { kind: "equip"; uid: string; seat: number };
 
 interface DurableState {
   storage: {
@@ -214,7 +214,7 @@ export class GameRoom {
 
     // Equipping / using potions out of combat: a player manages their own hero.
     if (action.kind === "equip") {
-      this.data.game = equipItem(g, action.itemId, seat);
+      this.data.game = equipItem(g, action.uid, seat);
       return;
     }
     if (action.kind === "useItem") {

@@ -249,6 +249,13 @@ export const ITEMS: Record<string, ItemDef> = {
   keycard: { id: "keycard", name: "Maintenance Keycard", kind: "key", desc: "Opens doors that the System forgot to lock.", value: 0 },
   loot_token: { id: "loot_token", name: "Bronze Loot Token", kind: "trinket", desc: "Redeemable at any Black Market terminal.", value: 10, stackable: true },
   sponsor_pin: { id: "sponsor_pin", name: "Sponsor Pin", kind: "trinket", desc: "A flair of corporate favor. The crowd notices you more.", value: 40 },
+
+  // Accessory bases (affixes/perks are rolled onto instances by lib/game/loot.ts)
+  ring: { id: "ring", name: "Ring", kind: "ring", desc: "A band of worked metal, faintly enchanted.", value: 20 },
+  amulet: { id: "amulet", name: "Amulet", kind: "amulet", desc: "A pendant that hums with worn power.", value: 25 },
+
+  // A rare consumable that revives a downed ally (non-necromancers' only option).
+  revive_kit: { id: "revive_kit", name: "Revivify Salts", kind: "potion", desc: "Smelling salts laced with life-magic — revives a fallen ally to 25% HP.", value: 60, stackable: true },
 };
 
 // ── Abilities ──

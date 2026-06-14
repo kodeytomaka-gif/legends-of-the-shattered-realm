@@ -162,6 +162,17 @@ const SCENE_LIST: Scene[] = [
         buy("b_chain", "chainmail", 35, "Chainmail (armor)"),
         buy("b_plate", "plate_armor", 90, "Riven Plate (armor)"),
         buy("b_charm", "lumen_charm", 40, "a Lumen Charm"),
+        {
+          id: "b_trinket",
+          label: "Buy an Enchanted Trinket — 60g",
+          hint: "A random ring or amulet",
+          enabled: (s) => s.gold >= 60,
+          run: (ctx) => {
+            if (ctx.state.gold < 60) return;
+            ctx.gold(-60);
+            ctx.giveGear(Math.random() < 0.5 ? "ring" : "amulet", { tier: 2 });
+          },
+        },
         go("c_back", "Stop shopping", "hearthford"),
       ];
     },

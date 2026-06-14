@@ -290,7 +290,7 @@ export default function OnlinePage() {
         onItem: (id) => session.action({ kind: "item", id }),
         onFlee: () => session.action({ kind: "flee" }),
         onUsePotion: (id, seat) => session.action({ kind: "useItem", itemId: id, seat }),
-        onEquip: (id, seat) => session.action({ kind: "equip", itemId: id, seat }),
+        onEquip: (uid, seat) => session.action({ kind: "equip", uid, seat }),
         onAct,
         onExit: () => { session.close(); router.push("/"); },
       }}

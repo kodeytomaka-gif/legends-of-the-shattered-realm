@@ -1,8 +1,8 @@
 "use client";
 
-import type { GameState, Character } from "@/lib/game/types";
-import { RACES, CLASSES } from "@/lib/game/content";
-import { armorClass } from "@/lib/game/character";
+import type { GameState, Character, ItemInstance } from "@/lib/game/types";
+import { CLASSES } from "@/lib/game/content";
+import { armorClass, effectiveMaxHp, effectiveMaxMp } from "@/lib/game/character";
 
 function MiniBar({ value, max, className }: { value: number; max: number; className: string }) {
   const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
@@ -13,7 +13,9 @@ function MiniBar({ value, max, className }: { value: number; max: number; classN
   );
 }
 
-function HeroCard({ c, active, downed }: { c: Character; active: boolean; downed: boolean }) {
+function HeroCard({ c, gear, active, downed }: { c: Character; gear: ItemInstance[]; active: boolean; downed: boolean }) {
+  const maxHp = effectiveMaxHp(c, gear);
+  const maxMp = effectiveMaxMp(c, gear);
   return (
     <div
       className={`rounded-md border px-2.5 py-1.5 transition ${
@@ -31,18 +33,18 @@ function HeroCard({ c, active, downed }: { c: Character; active: boolean; downed
           {downed && " 💀"}
         </span>
         <span className="shrink-0 text-[10px] text-parchment-300/60">
-          Lv{c.level} {CLASSES[c.klass].name} · 🛡{armorClass(c)}
+          Lv{c.level} {CLASSES[c.klass].name} · 🛡{armorClass(c, gear)}
         </span>
       </div>
       <div className="mt-1 space-y-1">
         <div className="flex items-center gap-1.5">
           <span className="w-7 shrink-0 text-[10px] text-ember-400/80">{Math.max(0, c.hp)}</span>
-          <MiniBar value={c.hp} max={c.maxHp} className="bg-gradient-to-r from-ember-500 to-ember-400" />
+          <MiniBar value={c.hp} max={maxHp} className="bg-gradient-to-r from-ember-500 to-ember-400" />
         </div>
-        {c.maxMp > 0 && (
+        {maxMp > 0 && (
           <div className="flex items-center gap-1.5">
             <span className="w-7 shrink-0 text-[10px] text-arcane-400/80">{c.mp}</span>
-            <MiniBar value={c.mp} max={c.maxMp} className="bg-gradient-to-r from-arcane-500 to-arcane-400" />
+            <MiniBar value={c.mp} max={maxMp} className="bg-gradient-to-r from-arcane-500 to-arcane-400" />
           </div>
         )}
       </div>
@@ -67,7 +69,7 @@ export default function HeroBar({ state, activeSeat }: { state: GameState; activ
       </div>
       <div className={`grid gap-2 ${solo ? "grid-cols-1" : "grid-cols-2"}`}>
         {state.party.map((c, i) => (
-          <HeroCard key={i} c={c} active={i === activeSeat} downed={c.hp <= 0} />
+          <HeroCard key={i} c={c} gear={state.gear} active={i === activeSeat} downed={c.hp <= 0} />
         ))}
       </div>
     </div>

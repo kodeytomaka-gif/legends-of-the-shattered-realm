@@ -1,4 +1,4 @@
-import type { GameState, Character, AbilityKey, InventorySlot } from "./types";
+import type { GameState, Character, AbilityKey, InventorySlot, ItemInstance, EquipSlot } from "./types";
 import { ABILITY_NAMES } from "./types";
 import type { SceneContext } from "./scene";
 import { getScene, getCampaign, AI_ITEM_UNION, AI_ENEMY_UNION } from "./campaigns";
@@ -9,7 +9,13 @@ import {
   hasItem,
   grantXp,
   startingKit,
+  startingEquip,
+  equippedMods,
+  effectiveMaxHp,
+  effectiveMaxMp,
+  getInstance,
 } from "./character";
+import { plainGear, rollGear } from "./loot";
 import { abilityCheck, type CheckResult } from "./dice";
 import { getAbility, ITEMS } from "./content";
 import { addLog, clone } from "./util";
@@ -21,19 +27,46 @@ import {
 } from "./combat";
 import type { AiAction, AiEffect } from "./dm";
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 4;
+
+const EQUIPPABLE_KINDS = new Set(["weapon", "armor", "ring", "amulet"]);
+function isEquippable(itemId: string): boolean {
+  const def = ITEMS[itemId];
+  return !!def && EQUIPPABLE_KINDS.has(def.kind);
+}
+// Route an item to the right pool: equippables become plain gear instances,
+// everything else stacks in the shared inventory.
+function grantItem(state: GameState, itemId: string, qty = 1): void {
+  if (isEquippable(itemId)) {
+    for (let i = 0; i < qty; i++) state.gear.push(plainGear(itemId));
+  } else {
+    addToInventory(state.inventory, itemId, qty);
+  }
+}
 
 export function newGame(party: Character[], campaignId = "shattered"): GameState {
   const campaign = getCampaign(campaignId);
   const heroes = party.length ? party : [];
 
-  // Pool starting gold and non-equipped items into shared party resources.
+  // Pool starting gold/items into shared resources; instantiate starting gear.
   const inventory: InventorySlot[] = [];
+  const gear: ItemInstance[] = [];
   let gold = 0;
   for (const hero of heroes) {
     const kit = startingKit(hero.klass);
     gold += kit.gold;
     for (const id of kit.items) addToInventory(inventory, id, 1);
+    const eq = startingEquip(hero.klass);
+    if (eq.weapon) {
+      const w = plainGear(eq.weapon);
+      gear.push(w);
+      hero.equipment.weapon = w.uid;
+    }
+    if (eq.armor) {
+      const a = plainGear(eq.armor);
+      gear.push(a);
+      hero.equipment.armor = a.uid;
+    }
   }
 
   const state: GameState = {
@@ -43,6 +76,7 @@ export function newGame(party: Character[], campaignId = "shattered"): GameState
     party: heroes,
     gold,
     inventory,
+    gear,
     shards: 0,
     turnPlayer: 0,
     sceneId: campaign.startScene,
@@ -93,7 +127,8 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       const hero = activeHero(state);
       // Elf keen senses helps perception-style (wis) checks a touch.
       const elfBonus = hero.race === "elf" && ability === "wis" ? 2 : 0;
-      const result = abilityCheck(hero.abilities, ability, dc, extra + elfBonus);
+      const gearMod = equippedMods(hero, state.gear).abilities[ability] ?? 0;
+      const result = abilityCheck(hero.abilities, ability, dc, extra + elfBonus + gearMod);
       const tag = state.party.length > 1 ? `${hero.name}: ` : "";
       const entry = addLog(
         state,
@@ -137,7 +172,12 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       addLog(state, "combat", `⚔ Battle begins — ${enemies.map((e) => e.name).join(", ")}.`);
     },
     give: (itemId, qty = 1) => {
-      addToInventory(state.inventory, itemId, qty);
+      grantItem(state, itemId, qty);
+    },
+    giveGear: (itemId, opts) => {
+      const inst = rollGear(itemId, opts);
+      state.gear.push(inst);
+      addLog(state, "loot", `Found: ${inst.name}.`);
     },
     take: (itemId, qty = 1) => removeFromInventory(state.inventory, itemId, qty),
     has: (itemId) => hasItem(state.inventory, itemId),
@@ -146,7 +186,7 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
     },
     heal: (amount) => {
       const hero = activeHero(state);
-      hero.hp = Math.min(hero.maxHp, hero.hp + amount);
+      hero.hp = Math.min(effectiveMaxHp(hero, state.gear), hero.hp + amount);
     },
     hurt: (amount) => {
       const hero = activeHero(state);
@@ -159,12 +199,12 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
     },
     restoreMp: (amount) => {
       const hero = activeHero(state);
-      hero.mp = Math.min(hero.maxMp, hero.mp + amount);
+      hero.mp = Math.min(effectiveMaxMp(hero, state.gear), hero.mp + amount);
     },
     restParty: () => {
       for (const c of state.party) {
-        c.hp = c.maxHp;
-        c.mp = c.maxMp;
+        c.hp = effectiveMaxHp(c, state.gear);
+        c.mp = effectiveMaxMp(c, state.gear);
         c.downed = false;
       }
     },
@@ -176,7 +216,7 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       let leveledAny = false;
       for (const hero of state.party) {
         if (hero.hp <= 0) continue;
-        const r = grantXp(hero, amount, hasLumen);
+        const r = grantXp(hero, amount, hasLumen, state.gear);
         if (r.leveled) {
           leveledAny = true;
           addLog(state, "level", `⚜ ${state.party.length > 1 ? hero.name : "You"} reach${state.party.length > 1 ? "es" : ""} level ${r.newLevel}!`);
@@ -326,7 +366,7 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
     const nm = state.party.length > 1 ? hero.name : "You";
     if (eff.type === "heal") {
       const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
-      hero.hp = Math.min(hero.maxHp, hero.hp + amt);
+      hero.hp = Math.min(effectiveMaxHp(hero, state.gear), hero.hp + amt);
       addLog(state, "system", `${nm} (+${amt} HP)`);
     } else if (eff.type === "hurt") {
       const amt = clampInt((eff as { amount?: number }).amount, 1, 12);
@@ -346,7 +386,7 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
       const amt = clampInt((eff as { amount?: number }).amount, 0, 25);
       if (amt > 0) {
         const hasLumen = hasItem(state.inventory, "lumen_charm");
-        const r = grantXp(hero, amt, hasLumen);
+        const r = grantXp(hero, amt, hasLumen, state.gear);
         addLog(state, "system", `${nm} (+${amt} XP)`);
         if (r.leveled) {
           addLog(state, "level", `⚜ ${nm} reach${state.party.length > 1 ? "es" : ""} level ${r.newLevel}!`);
@@ -356,7 +396,7 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
     } else if (eff.type === "item") {
       const id = (eff as { id?: string }).id ?? "";
       if (AI_ITEM_UNION.includes(id)) {
-        addToInventory(state.inventory, id, 1);
+        grantItem(state, id, 1);
         addLog(state, "loot", `Found: ${ITEMS[id].name}.`);
       }
     } else if (eff.type === "combat") {
@@ -387,20 +427,47 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
   return state;
 }
 
-// Equip a weapon or armor from the shared stash onto a specific hero.
-export function equipItem(prev: GameState, itemId: string, seat = 0): GameState {
+// Valid slots for an item kind.
+function slotsForKind(kind: string): EquipSlot[] {
+  if (kind === "weapon") return ["weapon"];
+  if (kind === "armor") return ["armor"];
+  if (kind === "ring") return ["ring1", "ring2"];
+  if (kind === "amulet") return ["amulet"];
+  return [];
+}
+
+// Equip a gear instance (by uid) onto a hero. Auto-picks the slot (for rings,
+// fills an empty ring slot, else ring1). The previously-equipped piece stays in
+// the shared gear pool, just unequipped.
+export function equipItem(prev: GameState, uid: string, seat = 0): GameState {
   const state = clone(prev);
-  const item = ITEMS[itemId];
   const hero = state.party[seat];
-  if (!item || !hero) return state;
-  if (!hasItem(state.inventory, itemId)) return state;
-  if (item.kind === "weapon") {
-    hero.equippedWeapon = itemId;
-    addLog(state, "system", `${state.party.length > 1 ? hero.name + " readies" : "You ready"} the ${item.name}.`);
-  } else if (item.kind === "armor") {
-    hero.equippedArmor = itemId;
-    addLog(state, "system", `${state.party.length > 1 ? hero.name + " dons" : "You don"} the ${item.name}.`);
+  const inst = getInstance(state.gear, uid);
+  if (!hero || !inst) return state;
+  const item = ITEMS[inst.defId];
+  const slots = slotsForKind(item.kind);
+  if (slots.length === 0) return state;
+  // Don't let the same instance occupy two slots.
+  for (const s of Object.keys(hero.equipment) as EquipSlot[]) {
+    if (hero.equipment[s] === uid) hero.equipment[s] = null;
   }
+  const slot = slots.find((s) => !hero.equipment[s]) ?? slots[0];
+  hero.equipment[slot] = uid;
+  // Clamp current HP/MP to the (possibly changed) effective maximums.
+  hero.hp = Math.min(hero.hp, effectiveMaxHp(hero, state.gear));
+  hero.mp = Math.min(hero.mp, effectiveMaxMp(hero, state.gear));
+  addLog(state, "system", `${state.party.length > 1 ? hero.name + " equips" : "You equip"} the ${inst.name}.`);
+  return state;
+}
+
+// Remove whatever is in a slot (it stays owned in the gear pool).
+export function unequipItem(prev: GameState, slot: EquipSlot, seat = 0): GameState {
+  const state = clone(prev);
+  const hero = state.party[seat];
+  if (!hero) return state;
+  hero.equipment[slot] = null;
+  hero.hp = Math.min(hero.hp, effectiveMaxHp(hero, state.gear));
+  hero.mp = Math.min(hero.mp, effectiveMaxMp(hero, state.gear));
   return state;
 }
 
@@ -416,11 +483,11 @@ export function useItemExploring(prev: GameState, itemId: string, seat = 0): Gam
   const nm = state.party.length > 1 ? hero.name : "You";
 
   if (item.heal) {
-    hero.hp = Math.min(hero.maxHp, hero.hp + item.heal);
+    hero.hp = Math.min(effectiveMaxHp(hero, state.gear), hero.hp + item.heal);
     addLog(state, "system", `${nm} drink${state.party.length > 1 ? "s" : ""} the ${item.name}. (+${item.heal} HP)`);
   }
   if (item.restoreMp) {
-    hero.mp = Math.min(hero.maxMp, hero.mp + item.restoreMp);
+    hero.mp = Math.min(effectiveMaxMp(hero, state.gear), hero.mp + item.restoreMp);
     addLog(state, "system", `${nm} drink${state.party.length > 1 ? "s" : ""} the ${item.name}. (+${item.restoreMp} Weave)`);
   }
   removeFromInventory(inv, itemId, 1);

@@ -8,9 +8,18 @@ import {
   addToInventory,
   grantXp,
   hasItem,
+  equippedMods,
+  effectiveMaxHp,
+  effectiveMaxMp,
 } from "./character";
 import { getItem, getAbility } from "./content";
+import { rollGear } from "./loot";
 import { roll, rollDice, rollRange, abilityMod, chance, pick } from "./dice";
+
+const EQUIP_KINDS = new Set(["weapon", "armor", "ring", "amulet"]);
+function heroPerks(state: GameState, seat: number): string[] {
+  return equippedMods(state.party[seat], state.gear).perks;
+}
 
 // ── Selectors ──
 
@@ -49,7 +58,7 @@ function raceArmorBonus(char: Character): number {
 
 function effectiveAc(state: GameState, seat: number): number {
   const c = state.party[seat];
-  return armorClass(c) + buffValue(state, seat, "ac") + raceArmorBonus(c);
+  return armorClass(c, state.gear) + buffValue(state, seat, "ac") + raceArmorBonus(c);
 }
 
 function who(state: GameState, seat: number): string {
@@ -68,33 +77,41 @@ export function playerAttack(state: GameState, targetIdx: number): void {
   const char = state.party[seat];
   const name = who(state, seat);
 
-  const atk = attackBonus(char) + buffValue(state, seat, "attack");
+  const perks = heroPerks(state, seat);
+  const atk = attackBonus(char, state.gear) + buffValue(state, seat, "attack");
   let d20 = roll(20);
 
-  // Halfling luck: one reroll of a missed attack per battle, per hero.
+  // One reroll of a missed attack per battle (Halfling trait or the Lucky perk).
   if (
-    char.race === "halfling" &&
+    (char.race === "halfling" || perks.includes("lucky")) &&
     !state.combat.luckUsed[seat] &&
     d20 + atk < enemy.ac &&
     d20 < 20
   ) {
     const reroll = roll(20);
     if (reroll > d20) {
-      addLog(state, "roll", `${name}'s Halfling Luck — rerolled the strike.`);
+      addLog(state, "roll", `${name}'s luck turns — the strike is rerolled.`);
       d20 = reroll;
     }
     state.combat.luckUsed[seat] = true;
   }
 
+  const critRoll = perks.includes("keen") ? 19 : 20; // Keen perk widens crit range
   const total = d20 + atk;
   if (d20 === 1) {
     addLog(state, "combat", `${name} swings at the ${enemy.name} and misses wildly. (rolled 1)`);
-  } else if (d20 === 20 || total >= enemy.ac) {
-    let amount = weaponDamageRoll(char).amount;
-    if (d20 === 20) amount = Math.round(amount * 1.8);
+  } else if (d20 >= critRoll || total >= enemy.ac) {
+    const isCrit = d20 >= critRoll;
+    let amount = weaponDamageRoll(char, state.gear).amount;
+    if (isCrit) amount = Math.round(amount * 1.8);
     if (char.race === "orc" && char.hp < char.maxHp / 2) amount += 2;
     enemy.hp = Math.max(0, enemy.hp - amount);
-    addLog(state, "combat", `${name} strikes the ${enemy.name} for ${amount} damage.${d20 === 20 ? " A critical hit!" : ""}`);
+    addLog(state, "combat", `${name} strikes the ${enemy.name} for ${amount} damage.${isCrit ? " A critical hit!" : ""}`);
+    if (perks.includes("vampiric")) {
+      const drain = Math.max(1, Math.ceil(amount * 0.2));
+      char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + drain);
+      addLog(state, "combat", `${name}'s vampiric weapon drinks ${drain} HP.`);
+    }
   } else {
     addLog(state, "combat", `${name}'s blow glances off the ${enemy.name}. (${total} vs AC ${enemy.ac})`);
   }
@@ -128,7 +145,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
   const eff = ability.effect;
 
   if (eff.type === "heal") {
-    char.hp = Math.min(char.maxHp, char.hp + eff.amount);
+    char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + eff.amount);
     addLog(state, "combat", `${ability.name} mends ${name} for ${eff.amount} HP.`);
   } else if (eff.type === "buff") {
     (state.combat.buffs[seat] ??= []).push({ stat: eff.stat, amount: eff.amount, turns: eff.turns + 1 });
@@ -146,7 +163,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
     const t = di >= 0 ? state.combat.enemies[di] : undefined;
     if (t && t.hp > 0) {
       t.hp = Math.max(0, t.hp - eff.amount);
-      char.hp = Math.min(char.maxHp, char.hp + Math.floor(eff.amount / 2));
+      char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + Math.floor(eff.amount / 2));
       addLog(state, "combat", `${name}'s ${ability.name} drains ${eff.amount} from the ${t.name}.`);
     }
   }
@@ -165,11 +182,11 @@ export function playerUseItem(state: GameState, itemId: string): boolean {
   const name = who(state, seat);
 
   if (item.heal) {
-    char.hp = Math.min(char.maxHp, char.hp + item.heal);
+    char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + item.heal);
     addLog(state, "combat", `${name} drinks the ${item.name} (+${item.heal} HP).`);
   }
   if (item.restoreMp) {
-    char.mp = Math.min(char.maxMp, char.mp + item.restoreMp);
+    char.mp = Math.min(effectiveMaxMp(char, state.gear), char.mp + item.restoreMp);
     addLog(state, "combat", `${name} drinks the ${item.name} (+${item.restoreMp} Weave).`);
   }
   removeFromInventory(state.inventory, itemId, 1);
@@ -269,10 +286,18 @@ function endRound(state: GameState): void {
       .map((b) => ({ ...b, turns: b.turns - 1 }))
       .filter((b) => b.turns > 0);
   }
-  // Passive Weave regen for living heroes.
+  // Passive Weave regen + Regenerating perk for living heroes.
   for (const seat of livingAllySeats(state)) {
     const c = state.party[seat];
-    if (c.mp < c.maxMp) c.mp = Math.min(c.maxMp, c.mp + 1);
+    const maxMp = effectiveMaxMp(c, state.gear);
+    if (c.mp < maxMp) c.mp = Math.min(maxMp, c.mp + 1);
+    if (heroPerks(state, seat).includes("regen")) {
+      const maxHp = effectiveMaxHp(c, state.gear);
+      if (c.hp < maxHp) {
+        c.hp = Math.min(maxHp, c.hp + 2);
+        addLog(state, "combat", `${who(state, seat)}'s gear regenerates 2 HP.`);
+      }
+    }
   }
 }
 
@@ -281,7 +306,7 @@ function endRound(state: GameState): void {
 function reviveParty(state: GameState): void {
   for (const c of state.party) {
     c.downed = false;
-    if (c.hp <= 0) c.hp = Math.max(1, Math.round(c.maxHp * 0.25));
+    if (c.hp <= 0) c.hp = Math.max(1, Math.round(effectiveMaxHp(c, state.gear) * 0.25));
   }
 }
 
@@ -292,17 +317,32 @@ function winCombat(state: GameState): void {
   const loot: string[] = [];
   const hasLumen = hasItem(state.inventory, "lumen_charm");
 
+  let topTier = 0;
   for (const enemy of state.combat.enemies) {
     totalXp += enemy.xp;
     totalGold += rollRange(enemy.goldDrop);
+    const tier = Math.min(5, Math.floor(enemy.xp / 45)); // tougher foes → better drops
+    topTier = Math.max(topTier, tier);
     if (enemy.lootTable) {
       for (const drop of enemy.lootTable) {
         if (chance(drop.chance)) {
-          addToInventory(state.inventory, drop.itemId, 1);
-          loot.push(getItem(drop.itemId).name);
+          if (EQUIP_KINDS.has(getItem(drop.itemId).kind)) {
+            const inst = rollGear(drop.itemId, { tier });
+            state.gear.push(inst);
+            loot.push(inst.name);
+          } else {
+            addToInventory(state.inventory, drop.itemId, 1);
+            loot.push(getItem(drop.itemId).name);
+          }
         }
       }
     }
+  }
+  // Tougher fights have a chance to drop a bonus enchanted accessory.
+  if (topTier >= 2 && chance(0.18 + topTier * 0.04)) {
+    const acc = rollGear(chance(0.5) ? "ring" : "amulet", { tier: topTier });
+    state.gear.push(acc);
+    loot.push(acc.name);
   }
 
   state.gold += totalGold;
@@ -314,7 +354,7 @@ function winCombat(state: GameState): void {
   for (let seat = 0; seat < state.party.length; seat++) {
     const c = state.party[seat];
     if (c.hp <= 0) continue;
-    const r = grantXp(c, totalXp, hasLumen);
+    const r = grantXp(c, totalXp, hasLumen, state.gear);
     if (r.leveled) {
       addLog(state, "level", `⚜ ${who(state, seat)} reaches level ${r.newLevel}! (HP & Weave restored)`);
       if (r.newAbility) addLog(state, "level", `${who(state, seat)} learned ${getAbility(r.newAbility).name}.`);

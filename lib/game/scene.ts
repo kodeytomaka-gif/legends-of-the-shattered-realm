@@ -1,4 +1,4 @@
-import type { AbilityKey, GameState } from "./types";
+import type { AbilityKey, GameState, Rarity } from "./types";
 import type { CheckResult } from "./dice";
 
 // The toolbox a scene/choice uses to affect the world. Implemented by the engine.
@@ -13,6 +13,8 @@ export interface SceneContext {
     opts: { onWin: string; onFlee?: string; scale?: number; intro?: string }
   ) => void;
   give: (itemId: string, qty?: number) => void;
+  // Roll and grant an enchanted gear instance (rarity/affixes) into the party's gear.
+  giveGear: (itemId: string, opts?: { tier?: number; rarity?: Rarity }) => void;
   take: (itemId: string, qty?: number) => boolean;
   has: (itemId: string) => boolean;
   gold: (delta: number) => void;

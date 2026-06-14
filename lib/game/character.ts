@@ -5,10 +5,63 @@ import type {
   ClassId,
   RaceId,
   InventorySlot,
+  ItemInstance,
 } from "./types";
 import { ABILITY_KEYS } from "./types";
 import { CLASSES, RACES, SUBCLASSES, getItem } from "./content";
 import { abilityMod, rollDice } from "./dice";
+
+// ── Equipment lookups & aggregated modifiers ──
+
+export function getInstance(gear: ItemInstance[], uid: string | null): ItemInstance | null {
+  if (!uid) return null;
+  return gear.find((g) => g.uid === uid) ?? null;
+}
+
+export function equippedInstances(char: Character, gear: ItemInstance[]): ItemInstance[] {
+  return (Object.values(char.equipment) as (string | null)[])
+    .map((u) => getInstance(gear, u))
+    .filter((x): x is ItemInstance => x !== null);
+}
+
+export interface EquipMods {
+  ac: number;
+  attack: number;
+  damage: number;
+  maxHp: number;
+  maxMp: number;
+  abilities: Partial<Abilities>;
+  perks: string[];
+}
+
+export function equippedMods(char: Character, gear: ItemInstance[]): EquipMods {
+  const m: EquipMods = { ac: 0, attack: 0, damage: 0, maxHp: 0, maxMp: 0, abilities: {}, perks: [] };
+  for (const inst of equippedInstances(char, gear)) {
+    const def = getItem(inst.defId);
+    if (def.kind === "armor") m.ac += def.ac ?? 0;
+    for (const a of inst.affixes) {
+      if (a.stat === "ac") m.ac += a.amount;
+      else if (a.stat === "attack") m.attack += a.amount;
+      else if (a.stat === "damage") m.damage += a.amount;
+      else if (a.stat === "maxHp") m.maxHp += a.amount;
+      else if (a.stat === "maxMp") m.maxMp += a.amount;
+      else m.abilities[a.stat] = (m.abilities[a.stat] ?? 0) + a.amount;
+    }
+    for (const p of inst.perks) if (!m.perks.includes(p)) m.perks.push(p);
+  }
+  if (m.perks.includes("guardian")) m.ac += 1;
+  return m;
+}
+
+export function effAbility(char: Character, gear: ItemInstance[], key: AbilityKey): number {
+  return char.abilities[key] + (equippedMods(char, gear).abilities[key] ?? 0);
+}
+export function effectiveMaxHp(char: Character, gear: ItemInstance[]): number {
+  return Math.max(1, char.maxHp + equippedMods(char, gear).maxHp);
+}
+export function effectiveMaxMp(char: Character, gear: ItemInstance[]): number {
+  return Math.max(0, char.maxMp + equippedMods(char, gear).maxMp);
+}
 
 export const POINT_BUY_TOTAL = 27;
 export const POINT_BUY_MIN = 8;
@@ -77,16 +130,14 @@ export function createCharacter(opts: {
   const maxHp = maxHpFor(klass, abilities.con, 1, false);
   const maxMp = maxMpFor(klass, primaryScore, 1);
 
-  // Equip starting weapon and armor.
-  const weapon = def.startingItems.find((id) => getItem(id).kind === "weapon") ?? null;
-  const armor = def.startingItems.find((id) => getItem(id).kind === "armor") ?? null;
-
   // Resolve the chosen subclass (default to the class's first) and grant its ability.
   const subs = SUBCLASSES[klass] ?? [];
   const sub = subs.find((s) => s.id === opts.subclass) ?? subs[0];
   const abilityIds = [...def.startingAbilities];
   if (sub && !abilityIds.includes(sub.grantsAbility)) abilityIds.push(sub.grantsAbility);
 
+  // Equipment slots start empty; newGame creates starting weapon/armor instances
+  // in the shared gear pool and assigns their uids here.
   return {
     name: name.trim() || "Wanderer",
     race,
@@ -99,11 +150,19 @@ export function createCharacter(opts: {
     maxHp,
     mp: maxMp,
     maxMp,
-    equippedWeapon: weapon,
-    equippedArmor: armor,
+    equipment: { weapon: null, armor: null, ring1: null, ring2: null, amulet: null },
     abilityIds,
     downed: false,
     createdAt: Date.now(),
+  };
+}
+
+// The starting weapon/armor base ids for a class (instantiated by newGame).
+export function startingEquip(klass: ClassId): { weapon: string | null; armor: string | null } {
+  const def = CLASSES[klass];
+  return {
+    weapon: def.startingItems.find((id) => getItem(id).kind === "weapon") ?? null,
+    armor: def.startingItems.find((id) => getItem(id).kind === "armor") ?? null,
   };
 }
 
@@ -154,23 +213,28 @@ export function removeFromInventory(inv: InventorySlot[], itemId: string, qty = 
   return true;
 }
 
-export function armorClass(char: Character): number {
-  const dexMod = abilityMod(char.abilities.dex);
-  const armor = char.equippedArmor ? getItem(char.equippedArmor).ac ?? 0 : 0;
-  return 10 + dexMod + armor;
+export function armorClass(char: Character, gear: ItemInstance[] = []): number {
+  const m = equippedMods(char, gear);
+  const dexMod = abilityMod(char.abilities.dex + (m.abilities.dex ?? 0));
+  return 10 + dexMod + m.ac;
 }
 
-export function attackBonus(char: Character): number {
+export function attackBonus(char: Character, gear: ItemInstance[] = []): number {
   const def = CLASSES[char.klass];
+  const m = equippedMods(char, gear);
   const profBonus = 2 + Math.floor((char.level - 1) / 2);
-  return abilityMod(char.abilities[def.primary]) + profBonus;
+  const prim = char.abilities[def.primary] + (m.abilities[def.primary] ?? 0);
+  return abilityMod(prim) + profBonus + m.attack;
 }
 
-export function weaponDamageRoll(char: Character): { amount: number; label: string } {
+export function weaponDamageRoll(char: Character, gear: ItemInstance[] = []): { amount: number; label: string } {
   const def = CLASSES[char.klass];
-  const weapon = char.equippedWeapon ? getItem(char.equippedWeapon) : null;
-  const dice = weapon?.damage ?? [1, 4];
-  const bonus = (weapon?.damageBonus ?? 0) + abilityMod(char.abilities[def.primary]);
+  const m = equippedMods(char, gear);
+  const weaponInst = getInstance(gear, char.equipment.weapon);
+  const weaponDef = weaponInst ? getItem(weaponInst.defId) : null;
+  const dice = weaponDef?.damage ?? [1, 4];
+  let bonus = (weaponDef?.damageBonus ?? 0) + abilityMod(char.abilities[def.primary] + (m.abilities[def.primary] ?? 0)) + m.damage;
+  if (m.perks.includes("brutal")) bonus += 2;
   const rolled = rollDice(dice[0], dice[1]) + bonus;
   return { amount: Math.max(1, rolled), label: `${dice[0]}d${dice[1]}+${bonus}` };
 }
@@ -196,7 +260,7 @@ const PROGRESSION: Record<ClassId, Record<number, string>> = {
   monk: { 3: "stunning_strike", 5: "smoke_bomb" },
 };
 
-export function grantXp(char: Character, amount: number, hasLumen = false): LevelUpResult {
+export function grantXp(char: Character, amount: number, hasLumen = false, gear: ItemInstance[] = []): LevelUpResult {
   const raceBonus = char.race === "human" ? 1.1 : 1;
   char.xp += Math.round(amount * raceBonus);
   let leveled = false;
@@ -216,8 +280,8 @@ export function grantXp(char: Character, amount: number, hasLumen = false): Leve
     mpGain += newMaxMp - char.maxMp;
     char.maxHp = newMaxHp;
     char.maxMp = newMaxMp;
-    char.hp = char.maxHp; // full restore on level up
-    char.mp = char.maxMp;
+    char.hp = effectiveMaxHp(char, gear); // full restore on level up (incl. gear)
+    char.mp = effectiveMaxMp(char, gear);
 
     const unlock = PROGRESSION[char.klass]?.[char.level];
     if (unlock && !char.abilityIds.includes(unlock)) {

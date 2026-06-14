@@ -55,7 +55,7 @@ export interface ClassDef {
   startingGold: number;
 }
 
-export type ItemKind = "weapon" | "armor" | "potion" | "trinket" | "shard" | "key";
+export type ItemKind = "weapon" | "armor" | "potion" | "trinket" | "shard" | "key" | "ring" | "amulet";
 
 export interface ItemDef {
   id: string;
@@ -79,6 +79,25 @@ export interface InventorySlot {
   itemId: string;
   qty: number;
 }
+
+// ── Equipment instances (rarity + rolled affixes/perks) ──
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type AffixStat = "ac" | "attack" | "damage" | "maxHp" | "maxMp" | AbilityKey;
+export interface Affix {
+  stat: AffixStat;
+  amount: number; // negative = a trade-off/penalty
+}
+export interface ItemInstance {
+  uid: string;
+  defId: string;
+  rarity: Rarity;
+  affixes: Affix[];
+  perks: string[]; // perk ids (see lib/game/loot.ts PERKS)
+  name: string;
+}
+
+export type EquipSlot = "weapon" | "armor" | "ring1" | "ring2" | "amulet";
+export type EquipSlots = Record<EquipSlot, string | null>; // slot -> ItemInstance uid
 
 export type AbilityEffect =
   | { type: "damage"; dice: [number, number]; bonus?: number; element?: string }
@@ -109,8 +128,7 @@ export interface Character {
   mp: number;
   maxMp: number;
   subclass: string;
-  equippedWeapon: string | null;
-  equippedArmor: string | null;
+  equipment: EquipSlots; // slot -> ItemInstance uid (into GameState.gear)
   abilityIds: string[];
   downed: boolean; // knocked out during the current battle
   createdAt: number;
@@ -190,6 +208,7 @@ export interface GameState {
   // Shared party resources.
   gold: number;
   inventory: InventorySlot[];
+  gear: ItemInstance[]; // unique equippable instances (weapons/armor/rings/amulets)
   shards: number; // Shards of Aethyr collected (campaign 1)
   // Whose turn it is to make exploration decisions (seat index).
   turnPlayer: number;

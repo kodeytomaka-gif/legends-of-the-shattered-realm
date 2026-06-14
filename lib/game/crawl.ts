@@ -171,6 +171,13 @@ const SCENE_LIST: Scene[] = [
         buy("dc_buy_power", "power_armor", 90, "Knockoff Power Armor"),
         buy("dc_buy_baton", "riot_baton", 18, "a Riot Baton"),
         {
+          id: "dc_acc1",
+          label: "Buy a Mystery Implant — 60g",
+          hint: "A random enchanted ring or amulet",
+          enabled: (s) => s.gold >= 60,
+          run: (ctx) => { if (ctx.state.gold < 60) return; ctx.gold(-60); ctx.giveGear(Math.random() < 0.5 ? "ring" : "amulet", { tier: 2 }); },
+        },
+        {
           id: "dc_rest1",
           label: "Nap in the safe room (full HP & mana)",
           enabled: (s) => s.party.some((c) => c.hp < c.maxHp || c.mp < c.maxMp),
@@ -371,6 +378,13 @@ const SCENE_LIST: Scene[] = [
         buy("dc_buy_power2", "power_armor", 90, "Knockoff Power Armor"),
         buy("dc_buy_rail", "railgun_pistol", 120, "a Railgun Pistol"),
         buy("dc_buy_nail", "nail_bat", 26, "a Bat With Nails In It"),
+        {
+          id: "dc_acc2",
+          label: "Buy a Premium Implant — 70g",
+          hint: "A random enchanted ring or amulet",
+          enabled: (s) => s.gold >= 70,
+          run: (ctx) => { if (ctx.state.gold < 70) return; ctx.gold(-70); ctx.giveGear(Math.random() < 0.5 ? "ring" : "amulet", { tier: 3 }); },
+        },
         {
           id: "dc_rest2",
           label: "Rest (full HP & mana)",
