@@ -3,6 +3,7 @@ import type {
   ClassDef,
   ItemDef,
   AbilityDef,
+  SubclassDef,
   RaceId,
   ClassId,
 } from "./types";
@@ -108,7 +109,99 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     startingItems: ["longbow", "leather_armor", "potion_minor", "potion_minor"],
     startingGold: 30,
   },
+  bard: {
+    id: "bard",
+    name: "Bard",
+    blurb: "A silver-tongued performer who turns wit and song into a weapon.",
+    primary: "cha",
+    hitDie: 8,
+    baseHp: 10,
+    baseMp: 12,
+    startingAbilities: ["vicious_mock", "inspire"],
+    startingItems: ["twin_daggers", "leather_armor", "potion_minor", "potion_mana"],
+    startingGold: 35,
+  },
+  paladin: {
+    id: "paladin",
+    name: "Paladin",
+    blurb: "An oathbound knight whose blade carries the weight of the divine.",
+    primary: "str",
+    hitDie: 10,
+    baseHp: 13,
+    baseMp: 8,
+    startingAbilities: ["divine_smite", "lay_hands"],
+    startingItems: ["longsword", "chainmail", "potion_minor", "potion_minor"],
+    startingGold: 25,
+  },
+  druid: {
+    id: "druid",
+    name: "Druid",
+    blurb: "A keeper of the wild places who calls on thorn, root, and storm.",
+    primary: "wis",
+    hitDie: 8,
+    baseHp: 11,
+    baseMp: 12,
+    startingAbilities: ["thorn_lash", "regrowth"],
+    startingItems: ["oak_staff", "robes", "potion_minor", "potion_mana"],
+    startingGold: 25,
+  },
+  monk: {
+    id: "monk",
+    name: "Monk",
+    blurb: "A disciplined martial artist who strikes faster than the eye can follow.",
+    primary: "dex",
+    hitDie: 8,
+    baseHp: 11,
+    baseMp: 8,
+    startingAbilities: ["flurry", "focus"],
+    startingItems: ["oak_staff", "leather_armor", "potion_minor", "potion_minor"],
+    startingGold: 20,
+  },
 };
+
+// Subclasses — pick one at creation; it grants a signature ability.
+export const SUBCLASSES: Record<ClassId, SubclassDef[]> = {
+  warrior: [
+    { id: "berserker", name: "Berserker", blurb: "Fury over form. Hits like a landslide.", grantsAbility: "reckless_blow" },
+    { id: "knight", name: "Knight", blurb: "An immovable wall of steel.", grantsAbility: "shield_wall" },
+  ],
+  mage: [
+    { id: "evoker", name: "Evoker", blurb: "Raw destructive force, refined.", grantsAbility: "arcane_surge" },
+    { id: "frostborn", name: "Frostborn", blurb: "Master of ice and the killing cold.", grantsAbility: "frost_nova" },
+  ],
+  rogue: [
+    { id: "assassin", name: "Assassin", blurb: "Poison, patience, and a perfect strike.", grantsAbility: "venom_strike" },
+    { id: "shadow", name: "Shadowdancer", blurb: "Here, then gone, then behind you.", grantsAbility: "smoke_bomb" },
+  ],
+  cleric: [
+    { id: "light", name: "Cleric of Light", blurb: "Radiance that scours the unclean.", grantsAbility: "holy_nova" },
+    { id: "war", name: "War Priest", blurb: "Faith with a mace in its hand.", grantsAbility: "guiding_bolt" },
+  ],
+  ranger: [
+    { id: "marksman", name: "Marksman", blurb: "One arrow, one breath, many targets.", grantsAbility: "volley" },
+    { id: "warden", name: "Beast Warden", blurb: "The wild fights at your side.", grantsAbility: "hunters_mark" },
+  ],
+  bard: [
+    { id: "satirist", name: "Satirist", blurb: "Words that wound deeper than blades.", grantsAbility: "vicious_mock" },
+    { id: "valor", name: "Bard of Valor", blurb: "A battle-hymn that lifts the whole party.", grantsAbility: "inspire" },
+  ],
+  paladin: [
+    { id: "vengeance", name: "Oath of Vengeance", blurb: "Relentless punishment of the wicked.", grantsAbility: "divine_smite" },
+    { id: "devotion", name: "Oath of Devotion", blurb: "A shield for the faithful.", grantsAbility: "shield_wall" },
+  ],
+  druid: [
+    { id: "thorns", name: "Circle of Thorns", blurb: "The wild bites back, hard.", grantsAbility: "thorn_lash" },
+    { id: "storm", name: "Storm Caller", blurb: "Calls the lightning down.", grantsAbility: "frost_nova" },
+  ],
+  monk: [
+    { id: "open_hand", name: "Way of the Open Hand", blurb: "Precise, paralyzing strikes.", grantsAbility: "stunning_strike" },
+    { id: "tempest", name: "Way of the Tempest", blurb: "A storm of fists no foe can weather.", grantsAbility: "flurry" },
+  ],
+};
+
+export function getSubclasses(klass: ClassId): SubclassDef[] {
+  return SUBCLASSES[klass] ?? [];
+}
 
 // ── Items ──
 export const ITEMS: Record<string, ItemDef> = {
@@ -219,6 +312,93 @@ export const ABILITIES: Record<string, AbilityDef> = {
     id: "hunters_mark", name: "Hunter's Mark", desc: "Mark your prey. +3 attack for 3 turns.",
     mpCost: 2, cooldown: 3, target: "self",
     effect: { type: "buff", stat: "attack", amount: 3, turns: 3 },
+  },
+
+  // ── Bard ──
+  vicious_mock: {
+    id: "vicious_mock", name: "Vicious Mockery", desc: "A cutting insult. 2d6 + CHA psychic damage.",
+    mpCost: 3, cooldown: 0, target: "enemy",
+    effect: { type: "damage", dice: [2, 6], element: "psychic" }, scalesWith: "cha",
+  },
+  inspire: {
+    id: "inspire", name: "Inspiration", desc: "A rousing verse. +3 attack for 3 turns.",
+    mpCost: 3, cooldown: 4, target: "self",
+    effect: { type: "buff", stat: "attack", amount: 3, turns: 3 },
+  },
+  // ── Paladin ──
+  divine_smite: {
+    id: "divine_smite", name: "Divine Smite", desc: "Holy wrath through your weapon. 2d8 + STR radiant.",
+    mpCost: 4, cooldown: 2, target: "enemy",
+    effect: { type: "damage", dice: [2, 8], element: "radiant" }, scalesWith: "str",
+  },
+  lay_hands: {
+    id: "lay_hands", name: "Lay on Hands", desc: "Channel healing light. Heal 22 HP.",
+    mpCost: 4, cooldown: 2, target: "self",
+    effect: { type: "heal", amount: 22 },
+  },
+  // ── Druid ──
+  thorn_lash: {
+    id: "thorn_lash", name: "Thorn Lash", desc: "Whip of living bramble. 2d6 + WIS damage.",
+    mpCost: 3, cooldown: 0, target: "enemy",
+    effect: { type: "damage", dice: [2, 6] }, scalesWith: "wis",
+  },
+  regrowth: {
+    id: "regrowth", name: "Regrowth", desc: "Nature mends you. Heal 20 HP.",
+    mpCost: 4, cooldown: 2, target: "self",
+    effect: { type: "heal", amount: 20 },
+  },
+  // ── Monk ──
+  flurry: {
+    id: "flurry", name: "Flurry of Blows", desc: "A blur of strikes. 3d4 + DEX damage.",
+    mpCost: 3, cooldown: 1, target: "enemy",
+    effect: { type: "damage", dice: [3, 4] }, scalesWith: "dex",
+  },
+  focus: {
+    id: "focus", name: "Inner Focus", desc: "Center yourself. +3 attack for 3 turns.",
+    mpCost: 2, cooldown: 3, target: "self",
+    effect: { type: "buff", stat: "attack", amount: 3, turns: 3 },
+  },
+
+  // ── Subclass signature abilities ──
+  reckless_blow: {
+    id: "reckless_blow", name: "Reckless Blow", desc: "All-out attack. 3d6 + STR damage.",
+    mpCost: 4, cooldown: 3, target: "enemy",
+    effect: { type: "damage", dice: [3, 6] }, scalesWith: "str",
+  },
+  shield_wall: {
+    id: "shield_wall", name: "Shield Wall", desc: "Brace behind your guard. +5 armor for 2 turns.",
+    mpCost: 3, cooldown: 4, target: "self",
+    effect: { type: "buff", stat: "ac", amount: 5, turns: 2 },
+  },
+  venom_strike: {
+    id: "venom_strike", name: "Venom Strike", desc: "A poisoned blade. 2d8 + DEX poison damage.",
+    mpCost: 4, cooldown: 2, target: "enemy",
+    effect: { type: "damage", dice: [2, 8], element: "poison" }, scalesWith: "dex",
+  },
+  arcane_surge: {
+    id: "arcane_surge", name: "Arcane Surge", desc: "Raw force unleashed. 3d6 + INT damage.",
+    mpCost: 5, cooldown: 2, target: "enemy",
+    effect: { type: "damage", dice: [3, 6], element: "force" }, scalesWith: "int",
+  },
+  holy_nova: {
+    id: "holy_nova", name: "Holy Nova", desc: "Radiance erupts. 2d6 + WIS to ALL enemies.",
+    mpCost: 5, cooldown: 3, target: "all-enemies",
+    effect: { type: "damage", dice: [2, 6], element: "radiant" }, scalesWith: "wis",
+  },
+  guiding_bolt: {
+    id: "guiding_bolt", name: "Guiding Bolt", desc: "A lance of light. 2d8 + WIS radiant.",
+    mpCost: 4, cooldown: 1, target: "enemy",
+    effect: { type: "damage", dice: [2, 8], element: "radiant" }, scalesWith: "wis",
+  },
+  volley: {
+    id: "volley", name: "Volley", desc: "A rain of arrows. 2d4 + DEX to ALL enemies.",
+    mpCost: 5, cooldown: 3, target: "all-enemies",
+    effect: { type: "damage", dice: [2, 4] }, scalesWith: "dex",
+  },
+  stunning_strike: {
+    id: "stunning_strike", name: "Stunning Strike", desc: "A precise nerve strike. 2d6 + DEX damage.",
+    mpCost: 3, cooldown: 2, target: "enemy",
+    effect: { type: "damage", dice: [2, 6] }, scalesWith: "dex",
   },
 };
 

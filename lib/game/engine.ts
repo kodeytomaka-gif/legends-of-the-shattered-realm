@@ -1,4 +1,5 @@
 import type { GameState, Character, AbilityKey, InventorySlot } from "./types";
+import { ABILITY_NAMES } from "./types";
 import type { SceneContext } from "./scene";
 import { getScene, getCampaign, AI_ITEM_UNION, AI_ENEMY_UNION } from "./campaigns";
 import { spawnEnemy } from "./enemies";
@@ -94,13 +95,22 @@ function makeContext(state: GameState): SceneContext & { _navTarget: string | nu
       const elfBonus = hero.race === "elf" && ability === "wis" ? 2 : 0;
       const result = abilityCheck(hero.abilities, ability, dc, extra + elfBonus);
       const tag = state.party.length > 1 ? `${hero.name}: ` : "";
-      addLog(
+      const entry = addLog(
         state,
         "roll",
         `🎲 ${tag}d20 (${result.d20}) ${result.mod >= 0 ? "+" : ""}${result.mod} = ${result.total} vs DC ${dc} — ${
           result.success ? "SUCCESS" : "FAILURE"
         }${result.crit === "hit" ? " (natural 20!)" : result.crit === "miss" ? " (natural 1!)" : ""}`
       );
+      entry.roll = {
+        d20: result.d20,
+        mod: result.mod,
+        total: result.total,
+        dc,
+        success: result.success,
+        crit: result.crit,
+        label: ABILITY_NAMES[ability],
+      };
       return result;
     },
     goto: (sceneId: string) => {

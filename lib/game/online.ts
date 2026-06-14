@@ -8,6 +8,7 @@ export interface HeroDraft {
   name: string;
   race: RaceId;
   klass: ClassId;
+  subclass: string;
   abilities: Abilities;
 }
 

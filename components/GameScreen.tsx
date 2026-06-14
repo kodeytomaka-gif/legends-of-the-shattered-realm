@@ -1,13 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import type { GameState } from "@/lib/game/types";
+import { useEffect, useRef, useState } from "react";
+import type { GameState, RollMeta } from "@/lib/game/types";
 import { getScene } from "@/lib/game/campaigns";
 import { currentAllySeat } from "@/lib/game/combat";
+import { loadSettings, saveSettings } from "@/lib/game/save";
 import HeroBar from "@/components/HeroBar";
 import StoryLog from "@/components/StoryLog";
 import CombatPanel from "@/components/CombatPanel";
 import CharacterSheet from "@/components/CharacterSheet";
+import DiceOverlay from "@/components/DiceOverlay";
+import SceneBackground from "@/components/SceneBackground";
+
+function speakable(kind: string): boolean {
+  return kind === "dm" || kind === "narration" || kind === "level";
+}
+function stripForSpeech(text: string): string {
+  return text.replace(/[⚜✦⚔🎲➤★⬇💀🛡⦿]/gu, "").replace(/\s+/g, " ").trim();
+}
 
 export interface GameHandlers {
   onChoose: (choiceId: string) => void;
@@ -40,6 +50,78 @@ export default function GameScreen({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [action, setAction] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dice, setDice] = useState(true);
+  const [narrate, setNarrate] = useState(false);
+
+  const lastRollId = useRef<string | null>(null);
+  const [pendingRoll, setPendingRoll] = useState<RollMeta | null>(null);
+  const spoken = useRef<Set<string>>(new Set());
+  const narratePrimed = useRef(false);
+
+  // Load dice/narrate preferences once.
+  useEffect(() => {
+    const s = loadSettings();
+    setDice(s.dice);
+    setNarrate(s.narrate);
+  }, []);
+
+  // Surface a tap-to-roll animation when a new skill-check roll appears.
+  useEffect(() => {
+    const rolls = state.log.filter((l) => l.roll);
+    const latest = rolls[rolls.length - 1];
+    if (!latest) return;
+    if (lastRollId.current === null) {
+      lastRollId.current = latest.id; // don't replay history on mount
+      return;
+    }
+    if (latest.id !== lastRollId.current) {
+      lastRollId.current = latest.id;
+      if (dice && latest.roll) setPendingRoll(latest.roll);
+    }
+  }, [state.log, dice]);
+
+  // Read narration aloud (browser text-to-speech).
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (!narrate) {
+      window.speechSynthesis.cancel();
+      return;
+    }
+    if (!narratePrimed.current) {
+      // First enable: skip the backlog, only read what comes next.
+      state.log.forEach((l) => spoken.current.add(l.id));
+      narratePrimed.current = true;
+      return;
+    }
+    for (const entry of state.log) {
+      if (spoken.current.has(entry.id)) continue;
+      spoken.current.add(entry.id);
+      if (!speakable(entry.kind)) continue;
+      const text = stripForSpeech(entry.text);
+      if (!text) continue;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.97;
+      u.pitch = 0.95;
+      window.speechSynthesis.speak(u);
+    }
+  }, [state.log, narrate]);
+
+  // Stop speaking when leaving.
+  useEffect(() => () => { if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel(); }, []);
+
+  function toggleDice() {
+    const v = !dice;
+    setDice(v);
+    saveSettings({ ...loadSettings(), dice: v });
+  }
+  function toggleNarrate() {
+    const v = !narrate;
+    setNarrate(v);
+    if (!v && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (v) narratePrimed.current = false; // re-prime so we don't dump backlog
+    saveSettings({ ...loadSettings(), narrate: v });
+  }
 
   const scene = getScene(state.sceneId);
   const choices = state.phase === "exploring" ? scene.choices(state) : [];
@@ -64,11 +146,31 @@ export default function GameScreen({
   }
 
   return (
+    <>
+    <SceneBackground campaignId={state.campaignId} region={scene.region ?? ""} />
+    {pendingRoll && <DiceOverlay roll={pendingRoll} onDone={() => setPendingRoll(null)} />}
     <main className="mx-auto flex h-[100dvh] max-w-3xl flex-col gap-3 px-4 py-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="relative flex items-center justify-between gap-2">
         <button onClick={handlers.onExit} className="ghost-btn !px-3 text-sm">{exitLabel}</button>
         <span className="truncate font-display text-sm text-gold-400/80">{scene.title}</span>
-        <button onClick={() => setSheetOpen(true)} className="ghost-btn !px-3 text-sm">Party</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setSettingsOpen((o) => !o)} className="ghost-btn !px-3 text-sm" title="Settings">⚙</button>
+          <button onClick={() => setSheetOpen(true)} className="ghost-btn !px-3 text-sm">Party</button>
+        </div>
+        {settingsOpen && (
+          <div className="absolute right-0 top-11 z-30 w-56 rounded-lg border border-gold-400/30 bg-ink-800 p-3 shadow-rune">
+            <p className="mb-2 font-display text-sm text-gold-400">Settings</p>
+            <label className="mb-2 flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>🎲 Dice animation</span>
+              <input type="checkbox" checked={dice} onChange={toggleDice} className="h-4 w-4 accent-gold-400" />
+            </label>
+            <label className="flex cursor-pointer items-center justify-between text-sm text-parchment-200/85">
+              <span>🔊 Read aloud</span>
+              <input type="checkbox" checked={narrate} onChange={toggleNarrate} className="h-4 w-4 accent-gold-400" />
+            </label>
+            <p className="mt-2 text-[11px] text-parchment-300/50">Read-aloud uses your device&apos;s voice.</p>
+          </div>
+        )}
       </div>
 
       <HeroBar state={state} activeSeat={activeSeat} />
@@ -160,5 +262,6 @@ export default function GameScreen({
         />
       )}
     </main>
+    </>
   );
 }

@@ -7,7 +7,7 @@ import type {
   InventorySlot,
 } from "./types";
 import { ABILITY_KEYS } from "./types";
-import { CLASSES, RACES, getItem } from "./content";
+import { CLASSES, RACES, SUBCLASSES, getItem } from "./content";
 import { abilityMod, rollDice } from "./dice";
 
 export const POINT_BUY_TOTAL = 27;
@@ -67,6 +67,7 @@ export function createCharacter(opts: {
   race: RaceId;
   klass: ClassId;
   abilities: Abilities;
+  subclass?: string;
 }): Character {
   const { name, race, klass } = opts;
   const def = CLASSES[klass];
@@ -80,10 +81,17 @@ export function createCharacter(opts: {
   const weapon = def.startingItems.find((id) => getItem(id).kind === "weapon") ?? null;
   const armor = def.startingItems.find((id) => getItem(id).kind === "armor") ?? null;
 
+  // Resolve the chosen subclass (default to the class's first) and grant its ability.
+  const subs = SUBCLASSES[klass] ?? [];
+  const sub = subs.find((s) => s.id === opts.subclass) ?? subs[0];
+  const abilityIds = [...def.startingAbilities];
+  if (sub && !abilityIds.includes(sub.grantsAbility)) abilityIds.push(sub.grantsAbility);
+
   return {
     name: name.trim() || "Wanderer",
     race,
     klass,
+    subclass: sub?.id ?? "",
     level: 1,
     xp: 0,
     abilities,
@@ -93,7 +101,7 @@ export function createCharacter(opts: {
     maxMp,
     equippedWeapon: weapon,
     equippedArmor: armor,
-    abilityIds: [...def.startingAbilities],
+    abilityIds,
     downed: false,
     createdAt: Date.now(),
   };
@@ -182,6 +190,10 @@ const PROGRESSION: Record<ClassId, Record<number, string>> = {
   rogue: { 3: "smoke_bomb" },
   cleric: { 3: "bless", 5: "smite" },
   ranger: { 3: "hunters_mark", 5: "aimed_shot" },
+  bard: { 3: "mend", 5: "guiding_bolt" },
+  paladin: { 3: "rally", 5: "smite" },
+  druid: { 3: "frost_nova", 5: "mend" },
+  monk: { 3: "stunning_strike", 5: "smoke_bomb" },
 };
 
 export function grantXp(char: Character, amount: number, hasLumen = false): LevelUpResult {

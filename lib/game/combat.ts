@@ -184,8 +184,10 @@ export function playerFlee(state: GameState): boolean {
   if (seat < 0) return false;
   const char = state.party[seat];
   const dexMod = abilityMod(char.abilities.dex);
-  const r = roll(20) + dexMod;
-  addLog(state, "roll", `${who(state, seat)} tries to flee: d20+${dexMod} = ${r} (need 11).`);
+  const d20 = roll(20);
+  const r = d20 + dexMod;
+  const fleeEntry = addLog(state, "roll", `${who(state, seat)} tries to flee: d20 (${d20})+${dexMod} = ${r} (need 11).`);
+  fleeEntry.roll = { d20, mod: dexMod, total: r, dc: 11, success: r >= 11, crit: d20 === 20 ? "hit" : d20 === 1 ? "miss" : null, label: "Escape" };
   if (r >= 11) {
     addLog(state, "system", state.party.length > 1 ? "The party breaks away and escapes!" : "You break away and escape!");
     const flee = state.combat.fleeSceneId ?? state.combat.originSceneId;

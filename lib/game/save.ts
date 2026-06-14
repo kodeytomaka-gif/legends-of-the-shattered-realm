@@ -6,7 +6,11 @@ const SETTINGS_KEY = "lotsr_settings_v1";
 
 export interface Settings {
   aiDm: boolean;
+  dice: boolean; // tap-to-roll dice animation
+  narrate: boolean; // read narration aloud (text-to-speech)
 }
+
+const DEFAULT_SETTINGS: Settings = { aiDm: true, dice: true, narrate: false };
 
 export function loadGame(): GameState | null {
   if (typeof window === "undefined") return null;
@@ -40,13 +44,13 @@ export function hasSave(): boolean {
 }
 
 export function loadSettings(): Settings {
-  if (typeof window === "undefined") return { aiDm: true };
+  if (typeof window === "undefined") return { ...DEFAULT_SETTINGS };
   try {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { aiDm: true };
-    return { aiDm: true, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
-    return { aiDm: true };
+    return { ...DEFAULT_SETTINGS };
   }
 }
 

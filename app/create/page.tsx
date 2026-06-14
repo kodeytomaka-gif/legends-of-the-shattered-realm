@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RACES, CLASSES } from "@/lib/game/content";
+import { RACES, CLASSES, getSubclasses } from "@/lib/game/content";
 import {
   ABILITY_KEYS,
   ABILITY_NAMES,
@@ -31,11 +31,12 @@ interface Draft {
   name: string;
   race: RaceId;
   klass: ClassId;
+  subclass: string;
   scores: Abilities;
 }
 
 function newDraft(): Draft {
-  return { name: "", race: "human", klass: "warrior", scores: defaultPointBuy() };
+  return { name: "", race: "human", klass: "warrior", subclass: getSubclasses("warrior")[0].id, scores: defaultPointBuy() };
 }
 
 export default function CreatePage() {
@@ -78,6 +79,7 @@ export default function CreatePage() {
         name: draft.name.trim() || `Hero ${i + 1}`,
         race: draft.race,
         klass: draft.klass,
+        subclass: draft.subclass,
         abilities: draft.scores,
       })
     );
@@ -218,7 +220,7 @@ export default function CreatePage() {
               return (
                 <button
                   key={id}
-                  onClick={() => patch({ klass: id })}
+                  onClick={() => patch({ klass: id, subclass: getSubclasses(id)[0].id })}
                   className={`w-full rounded-md border px-4 py-3 text-left transition ${
                     selected ? "border-gold-400 bg-ink-600/60 shadow-glow" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
                   }`}
@@ -228,6 +230,26 @@ export default function CreatePage() {
                     <span className="text-xs text-gold-400/80">Primary: {ABILITY_NAMES[c.primary]}</span>
                   </div>
                   <p className="mt-1 text-sm text-parchment-200/70">{c.blurb}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Subclass */}
+          <h3 className="mb-2 mt-4 font-display text-gold-400/80">Specialization</h3>
+          <div className="space-y-2">
+            {getSubclasses(d.klass).map((sub) => {
+              const selected = d.subclass === sub.id;
+              return (
+                <button
+                  key={sub.id}
+                  onClick={() => patch({ subclass: sub.id })}
+                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${
+                    selected ? "border-gold-400 bg-ink-600/60" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
+                  }`}
+                >
+                  <span className="font-display text-parchment-100">{sub.name}</span>
+                  <p className="mt-0.5 text-xs text-parchment-200/70">{sub.blurb}</p>
                 </button>
               );
             })}

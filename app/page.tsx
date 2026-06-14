@@ -36,7 +36,7 @@ export default function HomePage() {
   function toggleAi() {
     const next = !aiDm;
     setAiDm(next);
-    saveSettings({ aiDm: next });
+    saveSettings({ ...loadSettings(), aiDm: next });
   }
 
   function abandon() {

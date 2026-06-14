@@ -38,6 +38,25 @@
   }
 }
 
+@keyframes ember-rise {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.9; }
+  90% { opacity: 0.7; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+}
+@keyframes float-y {
+  0% { transform: translateY(0); opacity: 0.3; }
+  100% { transform: translateY(-24px); opacity: 0.8; }
+}
+@keyframes scan-move {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(3px); }
+}
+@keyframes grid-pan {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 48px; }
+}
+
 @layer components {
   .font-display {
     font-family: "Cinzel", serif;
@@ -85,6 +104,51 @@
 
   .bar-track {
     @apply h-2.5 w-full overflow-hidden rounded-full border border-black/40 bg-ink-900/80;
+  }
+
+  /* ── Animated scene backgrounds ── */
+  .bg-layer {
+    @apply pointer-events-none fixed inset-0 -z-10 overflow-hidden;
+  }
+  .ember {
+    position: absolute;
+    bottom: -12px;
+    width: 4px;
+    height: 4px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(240, 118, 76, 0.9), rgba(212, 175, 55, 0.2));
+    filter: blur(0.4px);
+    animation: ember-rise linear infinite;
+  }
+  .mote {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 9999px;
+    background: rgba(155, 123, 212, 0.7);
+    animation: float-y ease-in-out infinite alternate;
+  }
+  .scanlines::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.18) 3px
+    );
+    animation: scan-move 8s linear infinite;
+  }
+  .neon-grid {
+    position: absolute;
+    inset: -50%;
+    background-image:
+      linear-gradient(rgba(122, 85, 194, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(224, 83, 43, 0.1) 1px, transparent 1px);
+    background-size: 48px 48px;
+    transform: perspective(400px) rotateX(60deg);
+    animation: grid-pan 6s linear infinite;
   }
 
   .divider-rune {

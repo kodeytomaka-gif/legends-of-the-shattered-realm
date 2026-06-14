@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RACES, CLASSES } from "@/lib/game/content";
+import { RACES, CLASSES, getSubclasses } from "@/lib/game/content";
 import {
   ABILITY_KEYS,
   ABILITY_NAMES,
@@ -44,6 +44,7 @@ export default function OnlinePage() {
   const [code, setCode] = useState("");
   const [race, setRace] = useState<RaceId>("human");
   const [klass, setKlass] = useState<ClassId>("warrior");
+  const [subclass, setSubclass] = useState<string>(getSubclasses("warrior")[0].id);
   const [scores, setScores] = useState<Abilities>(defaultPointBuy);
   const [status, setStatus] = useState("");
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -79,7 +80,7 @@ export default function OnlinePage() {
     session.onStatus = (s) => {
       setStatus(s);
       if (s === "open") {
-        session.setHero({ name: trimmed, race, klass, abilities: scores });
+        session.setHero({ name: trimmed, race, klass, subclass, abilities: scores });
       }
     };
     session.onError = (m) => setStatus(m);
@@ -147,9 +148,18 @@ export default function OnlinePage() {
             <h2 className="mb-3 font-display text-xl text-gold-400">Calling</h2>
             <div className="space-y-1.5">
               {(Object.keys(CLASSES) as ClassId[]).map((id) => (
-                <button key={id} onClick={() => setKlass(id)} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${klass === id ? "border-gold-400 bg-ink-600/60" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"}`}>
+                <button key={id} onClick={() => { setKlass(id); setSubclass(getSubclasses(id)[0].id); }} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${klass === id ? "border-gold-400 bg-ink-600/60" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"}`}>
                   <span className="font-display text-parchment-100">{CLASSES[id].name}</span>
                   <span className="ml-2 text-xs text-gold-400/70">{ABILITY_NAMES[CLASSES[id].primary]}</span>
+                </button>
+              ))}
+            </div>
+            <h3 className="mb-2 mt-4 font-display text-sm text-gold-400/80">Specialization</h3>
+            <div className="space-y-1.5">
+              {getSubclasses(klass).map((sub) => (
+                <button key={sub.id} onClick={() => setSubclass(sub.id)} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition ${subclass === sub.id ? "border-gold-400 bg-ink-600/60" : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"}`}>
+                  <span className="font-display text-parchment-100">{sub.name}</span>
+                  <p className="mt-0.5 text-xs text-parchment-200/70">{sub.blurb}</p>
                 </button>
               ))}
             </div>

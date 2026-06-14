@@ -16,7 +16,23 @@ export const ABILITY_NAMES: Record<AbilityKey, string> = {
 export type Abilities = Record<AbilityKey, number>;
 
 export type RaceId = "human" | "elf" | "dwarf" | "orc" | "halfling";
-export type ClassId = "warrior" | "mage" | "rogue" | "cleric" | "ranger";
+export type ClassId =
+  | "warrior"
+  | "mage"
+  | "rogue"
+  | "cleric"
+  | "ranger"
+  | "bard"
+  | "paladin"
+  | "druid"
+  | "monk";
+
+export interface SubclassDef {
+  id: string;
+  name: string;
+  blurb: string;
+  grantsAbility: string; // ability id unlocked at creation
+}
 
 export interface RaceDef {
   id: RaceId;
@@ -92,6 +108,7 @@ export interface Character {
   maxHp: number;
   mp: number;
   maxMp: number;
+  subclass: string;
   equippedWeapon: string | null;
   equippedArmor: string | null;
   abilityIds: string[];
@@ -124,11 +141,22 @@ export type LogKind =
   | "loot"
   | "level";
 
+export interface RollMeta {
+  d20: number;
+  mod: number;
+  total: number;
+  dc: number;
+  success: boolean;
+  crit: "hit" | "miss" | null;
+  label?: string; // e.g. "Perception", "Stealth"
+}
+
 export interface LogEntry {
   id: string;
   kind: LogKind;
   text: string;
   ts: number;
+  roll?: RollMeta; // present on skill-check rolls, drives the dice animation
 }
 
 export type Phase = "creating" | "exploring" | "combat" | "gameover" | "victory";

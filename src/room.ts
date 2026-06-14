@@ -24,6 +24,7 @@ interface HeroDraft {
   name: string;
   race: Character["race"];
   klass: Character["klass"];
+  subclass: string;
   abilities: Character["abilities"];
 }
 
@@ -172,7 +173,7 @@ export class GameRoom {
       const ready = this.data.members.filter((m) => m.hero);
       if (ready.length === 0) return;
       const party = ready.map((m) =>
-        createCharacter({ name: m.hero!.name, race: m.hero!.race, klass: m.hero!.klass, abilities: m.hero!.abilities })
+        createCharacter({ name: m.hero!.name, race: m.hero!.race, klass: m.hero!.klass, subclass: m.hero!.subclass, abilities: m.hero!.abilities })
       );
       this.data.seatMap = {};
       ready.forEach((m, i) => (this.data.seatMap[m.id] = i));

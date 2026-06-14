@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { GameState } from "@/lib/game/types";
 import { ABILITY_KEYS, ABILITY_NAMES } from "@/lib/game/types";
-import { ABILITIES, getItem, RACES, CLASSES } from "@/lib/game/content";
+import { ABILITIES, getItem, RACES, CLASSES, getSubclasses } from "@/lib/game/content";
 import { abilityMod, modString } from "@/lib/game/dice";
 
 export default function CharacterSheet({
@@ -59,6 +59,10 @@ export default function CharacterSheet({
         <p className="text-sm text-parchment-100 font-display">{c.name}</p>
         <p className="text-sm text-parchment-300/70">
           Level {c.level} {RACES[c.race].name} {CLASSES[c.klass].name}
+          {(() => {
+            const sub = getSubclasses(c.klass).find((s) => s.id === c.subclass);
+            return sub ? ` · ${sub.name}` : "";
+          })()}
         </p>
         <p className="mt-1 text-xs text-ember-400/80">HP {Math.max(0, c.hp)}/{c.maxHp} · Weave {c.mp}/{c.maxMp}</p>
         <p className="mt-1 text-xs text-moss-400">{RACES[c.race].trait}</p>
