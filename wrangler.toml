@@ -25,3 +25,13 @@ not_found_handling = "404-page"
 # provisioned automatically on deploy; no dashboard step or API keys needed.
 [ai]
 binding = "AI"
+
+# Online co-op rooms — each room code is one Durable Object instance holding the
+# authoritative game state. SQLite-backed so it runs on the Workers free plan.
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]

@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GameState } from "@/lib/game/types";
-import { getScene } from "@/lib/game/campaigns";
-import { currentAllySeat } from "@/lib/game/combat";
 import {
   chooseOption,
   combatAttack,
@@ -18,22 +16,16 @@ import {
 } from "@/lib/game/engine";
 import { loadGame, saveGame, loadSettings } from "@/lib/game/save";
 import { embellishScene, actDm } from "@/lib/game/dm";
-import HeroBar from "@/components/HeroBar";
-import StoryLog from "@/components/StoryLog";
-import CombatPanel from "@/components/CombatPanel";
-import CharacterSheet from "@/components/CharacterSheet";
+import GameScreen from "@/components/GameScreen";
 
 export default function PlayPage() {
   const router = useRouter();
   const [state, setState] = useState<GameState | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [aiDm, setAiDm] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [action, setAction] = useState("");
   const lastEmbellished = useRef<string>("");
 
-  // Load the saved game once on mount.
   useEffect(() => {
     const g = loadGame();
     if (!g) {
@@ -45,16 +37,14 @@ export default function PlayPage() {
     setLoaded(true);
   }, [router]);
 
-  // Persist on every change.
   const commit = useCallback((next: GameState) => {
     setState(next);
     saveGame(next);
   }, []);
 
-  // AI narration each time the hero enters a new scene — unique every playthrough.
+  // Unique AI narration on each new scene.
   useEffect(() => {
-    if (!state || !aiDm) return;
-    if (state.phase !== "exploring") return;
+    if (!state || !aiDm || state.phase !== "exploring") return;
     const key = `${state.sceneId}#${state.shards}#${state.turnPlayer}`;
     if (lastEmbellished.current === key) return;
     lastEmbellished.current = key;
@@ -73,7 +63,6 @@ export default function PlayPage() {
         }
       })
       .finally(() => !cancelled && setAiBusy(false));
-
     return () => {
       cancelled = true;
     };
@@ -87,177 +76,43 @@ export default function PlayPage() {
     );
   }
 
-  const scene = getScene(state.sceneId);
-  const choices = state.phase === "exploring" ? scene.choices(state) : [];
-  const activeSeat = state.phase === "combat" ? currentAllySeat(state) : state.turnPlayer;
-  const multi = state.party.length > 1;
-  const activeName = state.party[activeSeat]?.name ?? state.party[0]?.name ?? "";
-
-  async function submitAction(e: React.FormEvent) {
-    e.preventDefault();
-    if (!state || !action.trim() || aiBusy || state.phase !== "exploring") return;
-    const text = action.trim();
-    setAction("");
-    // Echo the player's action immediately.
-    setState((cur) => {
-      if (!cur) return cur;
-      const next: GameState = {
-        ...cur,
-        log: [...cur.log, { id: `act_${Date.now()}`, kind: "player", text: `➤ ${text}`, ts: Date.now() }],
-      };
-      saveGame(next);
-      return next;
-    });
+  async function onAct(text: string) {
+    if (!state) return;
+    const withEcho: GameState = {
+      ...state,
+      log: [...state.log, { id: `act_${Date.now()}`, kind: "player", text: `➤ ${text}`, ts: Date.now() }],
+    };
+    commit(withEcho);
     setAiBusy(true);
     const result = await actDm(state, text);
     setAiBusy(false);
-    if (result) {
-      // Apply on top of the latest state (which already has the player's line).
-      setState((cur) => {
-        if (!cur) return cur;
-        const next = applyAiAction(cur, result);
-        saveGame(next);
-        return next;
-      });
-    } else {
-      setState((cur) => {
-        if (!cur) return cur;
-        const next: GameState = {
-          ...cur,
-          log: [...cur.log, { id: `actn_${Date.now()}`, kind: "system", text: "(The Dungeon Master is silent — AI isn't enabled on this site. Use the choices below to continue.)", ts: Date.now() }],
-        };
-        saveGame(next);
-        return next;
-      });
-    }
+    setState((cur) => {
+      if (!cur) return cur;
+      const next = result
+        ? applyAiAction(cur, result)
+        : { ...cur, log: [...cur.log, { id: `actn_${Date.now()}`, kind: "system" as const, text: "(The Dungeon Master is silent — AI isn't enabled here. Use the choices below.)", ts: Date.now() }] };
+      saveGame(next);
+      return next;
+    });
   }
 
-  const ended = state.phase === "gameover" || state.phase === "victory";
-
   return (
-    <main className="mx-auto flex h-[100dvh] max-w-3xl flex-col gap-3 px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <button onClick={() => router.push("/")} className="ghost-btn !px-3 text-sm">
-          ☰ Menu
-        </button>
-        <span className="truncate font-display text-sm text-gold-400/80">{scene.title}</span>
-        <button onClick={() => setSheetOpen(true)} className="ghost-btn !px-3 text-sm">
-          Character
-        </button>
-      </div>
-
-      <HeroBar state={state} activeSeat={activeSeat} />
-
-      {/* Story log */}
-      <section className="rune-card flex min-h-0 flex-1 flex-col !p-4">
-        <StoryLog log={state.log} busy={aiBusy} />
-      </section>
-
-      {/* Action area */}
-      <section className="shrink-0">
-        {state.phase === "exploring" && multi && (
-          <p className="mb-2 text-center text-xs font-display text-gold-300">
-            ▸ {activeName}&apos;s turn to decide — pass the device
-          </p>
-        )}
-        {state.phase === "exploring" && (
-          <div className="grid grid-cols-1 gap-2">
-            {choices.map((c) => {
-              if (c.show && !c.show(state)) return null;
-              const label = typeof c.label === "function" ? c.label(state) : c.label;
-              const hint = typeof c.hint === "function" ? c.hint(state) : c.hint;
-              const enabled = c.enabled ? c.enabled(state) : true;
-              return (
-                <button
-                  key={c.id}
-                  className="choice-btn"
-                  disabled={!enabled}
-                  onClick={() => commit(chooseOption(state, c.id))}
-                >
-                  <span>{label}</span>
-                  {hint && <span className="mt-0.5 block text-xs text-parchment-300/50">{hint}</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {state.phase === "combat" && (
-          <CombatPanel
-            state={state}
-            canAct
-            disabled={aiBusy}
-            onAttack={(idx) => commit(combatAttack(state, idx))}
-            onAbility={(id, idx) => commit(combatAbility(state, id, idx))}
-            onItem={(id) => commit(combatItem(state, id))}
-            onFlee={() => commit(combatFlee(state))}
-          />
-        )}
-
-        {state.phase === "gameover" && (
-          <div className="rune-card text-center">
-            <h2 className="font-display text-2xl text-ember-400">Your Legend Ends</h2>
-            <p className="mt-2 text-parchment-200/80">The realm remains shattered… for now.</p>
-            <div className="mt-4 flex justify-center gap-3">
-              <button className="gold-btn" onClick={() => router.push("/create")}>
-                Forge a New Hero
-              </button>
-              <button className="ghost-btn" onClick={() => router.push("/")}>
-                Main Menu
-              </button>
-            </div>
-          </div>
-        )}
-
-        {state.phase === "victory" && (
-          <div className="rune-card text-center">
-            <h2 className="font-display text-2xl text-gold-400">Victory</h2>
-            <p className="mt-2 text-parchment-200/80">
-              Your story is complete. The final words are written above.
-            </p>
-            <div className="mt-4 flex justify-center gap-3">
-              <button className="gold-btn" onClick={() => router.push("/create")}>
-                Begin Anew
-              </button>
-              <button className="ghost-btn" onClick={() => router.push("/")}>
-                Main Menu
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Free-form action box — the AI DM adjudicates what you try */}
-        {aiDm && state.phase === "exploring" && (
-          <form onSubmit={submitAction} className="mt-2">
-            <div className="flex gap-2">
-              <input
-                className="input"
-                placeholder="Or do anything… (search the ruins, pray, set a trap, sweet-talk a guard)"
-                value={action}
-                onChange={(e) => setAction(e.target.value)}
-                disabled={aiBusy}
-                maxLength={200}
-              />
-              <button className="gold-btn shrink-0" disabled={aiBusy || !action.trim()}>
-                {aiBusy ? "…" : "Act"}
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] text-parchment-300/40">
-              The Dungeon Master improvises a unique outcome — your story is your own.
-            </p>
-          </form>
-        )}
-      </section>
-
-      {sheetOpen && (
-        <CharacterSheet
-          state={state}
-          onClose={() => setSheetOpen(false)}
-          onUsePotion={(id, seat) => commit(useItemExploring(state, id, seat))}
-          onEquip={(id, seat) => commit(equipItem(state, id, seat))}
-        />
-      )}
-    </main>
+    <GameScreen
+      state={state}
+      canAct
+      aiEnabled={aiDm}
+      aiBusy={aiBusy}
+      handlers={{
+        onChoose: (id) => commit(chooseOption(state, id)),
+        onAttack: (t) => commit(combatAttack(state, t)),
+        onAbility: (id, t) => commit(combatAbility(state, id, t)),
+        onItem: (id) => commit(combatItem(state, id)),
+        onFlee: () => commit(combatFlee(state)),
+        onUsePotion: (id, seat) => commit(useItemExploring(state, id, seat)),
+        onEquip: (id, seat) => commit(equipItem(state, id, seat)),
+        onAct,
+        onExit: () => router.push("/"),
+      }}
+    />
   );
 }

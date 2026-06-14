@@ -38,6 +38,23 @@ npm run dev        # http://localhost:3000
 Your progress autosaves to `localStorage`. Use **Continue** on the title screen
 to resume.
 
+### Multiplayer (shared co-op party)
+
+Up to **4 heroes** adventure through one shared story together. In battle every
+hero takes their own turn (side-based rounds); out of combat, exploration
+decisions pass between players. Gold and the item stash are shared; equipment is
+per-hero.
+
+- **Pass-and-play** — build 1-4 heroes on one device from "New Legend"; the
+  screen shows whose turn it is so you can pass the device around. No servers.
+- **Online co-op (room codes)** — "Online Co-op" on the title screen. Create a
+  room to get a 4-letter code, friends join with it and build their own hero, the
+  host picks the adventure and starts. Each online room is a **Cloudflare Durable
+  Object** that holds the authoritative game state and runs the very same engine;
+  clients send actions over WebSocket and receive the updated state. Turn
+  ownership is enforced server-side, and the AI DM's effects pass through the same
+  guardrails. SQLite-backed, so it runs on the Workers free plan.
+
 ### The AI Dungeon Master (on by default)
 
 The AI DM makes every playthrough different. When enabled (the default — toggle

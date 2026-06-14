@@ -24,7 +24,21 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   AI?: AiBinding;
   DM_MODEL?: string;
+  GAME_ROOM: DurableObjectNamespace;
 }
+
+interface DurableObjectNamespace {
+  idFromName(name: string): DurableObjectId;
+  get(id: DurableObjectId): DurableObjectStub;
+}
+interface DurableObjectId {
+  toString(): string;
+}
+interface DurableObjectStub {
+  fetch(request: Request): Promise<Response>;
+}
+
+export { GameRoom } from "./room";
 
 interface DmRequest {
   mode?: "embellish" | "ask" | "act";
@@ -134,6 +148,12 @@ export default {
     if (url.pathname === "/api/dm") {
       if (request.method !== "POST") return json({ text: "" }, 405);
       return handleDm(request, env);
+    }
+    // Online co-op rooms: /api/room/<CODE>/ws  ->  the room's Durable Object.
+    const room = url.pathname.match(/^\/api\/room\/([A-Za-z0-9]{1,8})\/ws$/);
+    if (room) {
+      const id = env.GAME_ROOM.idFromName(room[1].toUpperCase());
+      return env.GAME_ROOM.get(id).fetch(request);
     }
     // Not an API route — serve the static game.
     return env.ASSETS.fetch(request);

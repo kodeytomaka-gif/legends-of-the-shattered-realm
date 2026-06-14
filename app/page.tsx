@@ -79,6 +79,13 @@ export default function HomePage() {
           {saved ? "Begin a New Legend" : "Begin Your Legend"}
         </Link>
 
+        <Link href="/online" className="ghost-btn w-full">
+          ⚔ Online Co-op (room codes)
+        </Link>
+        <p className="-mt-1 text-xs text-parchment-300/50">
+          Up to 4 players online, or pass-and-play on one device from “New Legend”.
+        </p>
+
         {saved && (
           <button onClick={abandon} className="text-sm text-ember-400/70 underline hover:text-ember-400">
             Abandon current save
