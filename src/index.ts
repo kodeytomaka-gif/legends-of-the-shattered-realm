@@ -1,28 +1,28 @@
-// Cloudflare Pages Function: POST /api/dm
+// Cloudflare Worker entry point (Workers + Static Assets model).
 //
-// Powers the AI Dungeon Master. It uses Cloudflare Workers AI when the `AI`
-// binding is configured for the Pages project; otherwise it returns an empty
-// body and the game falls back to its built-in narration. No external API keys
-// are required for the default (Workers AI) path.
+// Static game files in `out/` are served by the [assets] binding. This Worker
+// only runs for requests that don't match a static file — namely the AI
+// Dungeon Master endpoint POST /api/dm. Everything else is delegated to assets.
 //
-// Modes:
-//   "embellish" — a unique atmospheric paragraph for the current scene.
-//   "ask"       — an in-fiction answer to a player's question/remark.
-//   "act"       — adjudicates a free-form player action, returning STRICT JSON
-//                 { narration, effects[] }. The client validates & clamps every
-//                 effect against game rules before applying it.
+// The AI DM uses Cloudflare Workers AI via the `AI` binding (declared in
+// wrangler.toml, so it is provisioned automatically on deploy — no dashboard
+// step or API keys required). If the binding is absent, the endpoint returns an
+// empty body and the game falls back to its built-in narration.
+
+interface AiBinding {
+  run: (
+    model: string,
+    input: {
+      messages: { role: string; content: string }[];
+      max_tokens?: number;
+      temperature?: number;
+    }
+  ) => Promise<{ response?: string }>;
+}
 
 interface Env {
-  AI?: {
-    run: (
-      model: string,
-      input: {
-        messages: { role: string; content: string }[];
-        max_tokens?: number;
-        temperature?: number;
-      }
-    ) => Promise<{ response?: string }>;
-  };
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
+  AI?: AiBinding;
   DM_MODEL?: string;
 }
 
@@ -66,10 +66,7 @@ function buildContext(req: DmRequest): string {
     .join("\n");
 }
 
-export const onRequestPost: (ctx: { request: Request; env: Env }) => Promise<Response> = async ({
-  request,
-  env,
-}) => {
+async function handleDm(request: Request, env: Env): Promise<Response> {
   let req: DmRequest;
   try {
     req = (await request.json()) as DmRequest;
@@ -77,7 +74,6 @@ export const onRequestPost: (ctx: { request: Request; env: Env }) => Promise<Res
     return json({ text: "" }, 400);
   }
 
-  // No AI binding configured — let the client use its built-in narration.
   if (!env.AI) return json({ text: "" });
 
   const context = buildContext(req);
@@ -124,9 +120,20 @@ Return ONLY the JSON object.`;
       max_tokens: maxTokens,
       temperature: req.mode === "act" ? 0.7 : 0.9,
     });
-    const text = (result.response ?? "").trim();
-    return json({ text });
+    return json({ text: (result.response ?? "").trim() });
   } catch {
     return json({ text: "" });
   }
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/dm") {
+      if (request.method !== "POST") return json({ text: "" }, 405);
+      return handleDm(request, env);
+    }
+    // Not an API route — serve the static game.
+    return env.ASSETS.fetch(request);
+  },
 };

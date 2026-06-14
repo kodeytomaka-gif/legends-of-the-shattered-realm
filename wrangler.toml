@@ -1,14 +1,20 @@
-# Cloudflare Pages configuration for Legends of the Shattered Realm.
+# Cloudflare Worker (Workers + Static Assets) for Legends of the Shattered Realm.
 #
-# Deploy with:   npm run build && npx wrangler pages deploy out
-# or connect this repo in the Cloudflare dashboard with:
-#   Build command:  npm run build
-#   Output dir:     out
+# `next build` produces the static site in ./out, which is served by the [assets]
+# binding. The Worker in src/index.ts runs only for non-asset routes (the AI DM
+# endpoint /api/dm).
+#
+# Deploy:  npm run build && npx wrangler deploy
 name = "legends-of-the-shattered-realm"
+main = "src/index.ts"
 compatibility_date = "2025-01-15"
-pages_build_output_dir = "out"
 
-# Workers AI binding — powers the optional AI Dungeon Master (/api/dm).
-# Remove this block to run the game with built-in narration only.
+[assets]
+directory = "./out"
+binding = "ASSETS"
+not_found_handling = "404-page"
+
+# Workers AI — powers the AI Dungeon Master (/api/dm). Declared here so it is
+# provisioned automatically on deploy; no dashboard step or API keys needed.
 [ai]
 binding = "AI"

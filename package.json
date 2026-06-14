@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "preview": "wrangler pages dev out",
-    "deploy": "next build && wrangler pages deploy out"
+    "preview": "next build && wrangler dev",
+    "deploy": "next build && wrangler deploy"
   },
   "dependencies": {
     "next": "^15.5.19",

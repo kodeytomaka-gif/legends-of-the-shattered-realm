@@ -5,9 +5,9 @@ gather the three Shards of Aethyr, and decide whether to **mend** the broken
 world — or **claim** it for yourself.
 
 The entire game runs in the browser and saves to your device. It ships as a
-static site (Next.js static export) with a single optional Cloudflare Pages
-Function powering the AI narration, so it deploys to **Cloudflare Pages** as its
-own standalone site with no database, accounts, or servers to run.
+static site (Next.js static export) served by a **Cloudflare Worker with Static
+Assets**; the same Worker exposes a single `/api/dm` endpoint that powers the AI
+narration via Workers AI. No database, accounts, or servers to run.
 
 ---
 
@@ -55,40 +55,35 @@ back to its rich built-in narration — every scene still reads well without it.
 
 ---
 
-## Deploy to Cloudflare Pages
+## Deploy to Cloudflare
 
-The build produces a static `out/` directory plus the `functions/` directory,
-which Cloudflare Pages serves together (static assets + the `/api/dm` function).
+This deploys as a **Worker with Static Assets**. `next build` writes the static
+site to `./out`; `wrangler deploy` uploads those assets and the Worker
+(`src/index.ts`) together. The `AI` binding is declared in `wrangler.toml`, so
+Workers AI is provisioned automatically — **no dashboard step or API keys.**
 
 ### Option A — Wrangler CLI
 
 ```bash
-npm run build
-npx wrangler pages deploy out
+npm install
+npm run deploy        # runs: next build && wrangler deploy
 ```
 
-On first run, Wrangler will create a Pages project named
-`legends-of-the-shattered-realm` (configurable in `wrangler.toml`).
+### Option B — Connect the Git repo (Cloudflare Workers Builds)
 
-### Option B — Connect the Git repo in the Cloudflare dashboard
+Connect this repository to a Worker in the Cloudflare dashboard and use:
 
-In **Cloudflare → Workers & Pages → Create → Pages → Connect to Git**, select
-this repository and use:
+| Setting        | Value             |
+| -------------- | ----------------- |
+| Build command  | `npm run build`   |
+| Deploy command | `npx wrangler deploy` |
 
-| Setting               | Value           |
-| --------------------- | --------------- |
-| Framework preset      | `Next.js (Static HTML Export)` |
-| Build command         | `npm run build` |
-| Build output directory| `out`           |
+Every push to the production branch then builds and deploys automatically. The
+Worker name in `wrangler.toml` (`legends-of-the-shattered-realm`) must match the
+connected Worker.
 
-### Enable the AI Dungeon Master (optional)
-
-In the Pages project → **Settings → Functions → Bindings**, add a
-**Workers AI** binding named `AI`. (The `wrangler.toml` in this repo already
-declares it for CLI deploys.) That's all that's required — no API keys.
-
-To change the model, set a `DM_MODEL` environment variable (defaults to
-`@cf/meta/llama-3.1-8b-instruct`).
+To change the AI model, set a `DM_MODEL` variable (defaults to
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast`).
 
 ---
 
@@ -108,7 +103,7 @@ lib/game/            The game engine (pure TypeScript, framework-agnostic)
   engine.ts            orchestration: enter scenes, run choices, drive combat
   save.ts              localStorage persistence
   dm.ts                AI DM client (talks to /api/dm, degrades gracefully)
-functions/api/dm.ts  Cloudflare Pages Function (Workers AI) for the AI DM
+src/index.ts         Cloudflare Worker: serves static assets + /api/dm (Workers AI)
 ```
 
 The game logic in `lib/game/` has no React or Next dependencies, which keeps it
