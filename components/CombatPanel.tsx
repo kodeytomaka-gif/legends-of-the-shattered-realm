@@ -158,7 +158,10 @@ export default function CombatPanel({
               title={a.desc}
               onClick={() => (a.target === "ally" ? setAllyPick(id) : onAbility(id, target))}
             >
-              <span className="text-sm">{a.name}</span>
+              <span className="text-sm">
+                {a.name}
+                {(hero.skill[id]?.rank ?? 1) > 1 && <span className="ml-1 text-[9px] text-gold-300">{"★".repeat(hero.skill[id]?.rank ?? 1)}</span>}
+              </span>
               <span className="text-[10px] text-arcane-400/80">
                 {a.mpCost} Weave{cd > 0 ? ` · CD ${cd}` : ""}{usedToday ? " · used today" : a.dayCooldown ? " · 1/day" : ""}
               </span>

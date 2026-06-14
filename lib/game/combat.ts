@@ -11,6 +11,8 @@ import {
   equippedMods,
   effectiveMaxHp,
   effectiveMaxMp,
+  rankBonus,
+  bumpSkill,
 } from "./character";
 import { getItem, getAbility } from "./content";
 import { rollGear } from "./loot";
@@ -133,7 +135,7 @@ export function playerAttack(state: GameState, targetIdx: number): void {
     addLog(state, "combat", `${name} swings at the ${enemy.name} and misses wildly. (rolled 1)`);
   } else if (d20 >= critRoll || total >= enemy.ac) {
     const isCrit = d20 >= critRoll;
-    let amount = weaponDamageRoll(char, state.gear).amount;
+    let amount = weaponDamageRoll(char, state.gear).amount + rankBonus(char, "_weapon");
     if (isCrit) amount = Math.round(amount * 1.8);
     if (char.race === "orc" && char.hp < char.maxHp / 2) amount += 2;
     enemy.hp = Math.max(0, enemy.hp - amount);
@@ -148,6 +150,8 @@ export function playerAttack(state: GameState, targetIdx: number): void {
       applyStatus(enemy.statuses, { type: "burn", turns: 2, magnitude: 3 });
       addLog(state, "combat", `The ${enemy.name} is set alight!`);
     }
+    const up = bumpSkill(char, "_weapon");
+    if (up) addLog(state, "level", `${name}'s weapon mastery rises to Rank ${up}!`);
   } else {
     addLog(state, "combat", `${name}'s blow glances off the ${enemy.name}. (${total} vs AC ${enemy.ac})`);
   }
@@ -184,6 +188,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
   if (ability.dayCooldown) state.dailyUsed[dayKey] = state.time.day;
 
   const scaleMod = ability.scalesWith ? Math.max(0, abilityMod(char.abilities[ability.scalesWith])) : 0;
+  const rb = rankBonus(char, abilityId); // use-based mastery: 0..4
   const eff = ability.effect;
 
   // Heal/revive can target self or a chosen ally seat (targetIdx).
@@ -191,8 +196,9 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
 
   if (eff.type === "heal") {
     const t = state.party[allySeat] ?? char;
-    t.hp = Math.min(effectiveMaxHp(t, state.gear), t.hp + eff.amount);
-    addLog(state, "combat", `${ability.name} mends ${who(state, allySeat)} for ${eff.amount} HP.`);
+    const amt = eff.amount + rb * 2;
+    t.hp = Math.min(effectiveMaxHp(t, state.gear), t.hp + amt);
+    addLog(state, "combat", `${ability.name} mends ${who(state, allySeat)} for ${amt} HP.`);
   } else if (eff.type === "revive") {
     const t = state.party[allySeat];
     if (!t || t.hp > 0) {
@@ -213,7 +219,7 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
     const single = resolveTarget(state, targetIdx);
     const targets = ability.target === "all-enemies" ? aliveEnemies(state) : single >= 0 ? [state.combat.enemies[single]] : [];
     for (const t of targets) {
-      const dmg = rollDice(eff.dice[0], eff.dice[1]) + scaleMod;
+      const dmg = rollDice(eff.dice[0], eff.dice[1]) + scaleMod + rb;
       t.hp = Math.max(0, t.hp - dmg);
       addLog(state, "combat", `${name}'s ${ability.name} hits the ${t.name} for ${dmg}${eff.element ? ` ${eff.element}` : ""} damage.`);
       if (eff.applies && t.hp > 0) {
@@ -226,11 +232,16 @@ export function playerAbility(state: GameState, abilityId: string, targetIdx: nu
     const di = resolveTarget(state, targetIdx);
     const t = di >= 0 ? state.combat.enemies[di] : undefined;
     if (t && t.hp > 0) {
-      t.hp = Math.max(0, t.hp - eff.amount);
-      char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + Math.floor(eff.amount / 2));
-      addLog(state, "combat", `${name}'s ${ability.name} drains ${eff.amount} from the ${t.name}.`);
+      const amt = eff.amount + rb * 2;
+      t.hp = Math.max(0, t.hp - amt);
+      char.hp = Math.min(effectiveMaxHp(char, state.gear), char.hp + Math.floor(amt / 2));
+      addLog(state, "combat", `${name}'s ${ability.name} drains ${amt} from the ${t.name}.`);
     }
   }
+
+  // Use-based mastery: this ability ranks up the more it's cast.
+  const rankedUp = bumpSkill(char, abilityId);
+  if (rankedUp) addLog(state, "level", `${name}'s ${ability.name} reaches Rank ${rankedUp}!`);
 
   afterAllyAction(state, seat);
   return true;

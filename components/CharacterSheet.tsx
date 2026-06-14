@@ -15,6 +15,8 @@ import {
   effectiveMaxMp,
   getInstance,
   equippedMods,
+  MASTERY_THRESHOLDS,
+  MAX_RANK,
 } from "@/lib/game/character";
 import { RARITY } from "@/lib/game/loot";
 import ItemCard from "@/components/ItemCard";
@@ -170,13 +172,23 @@ export default function CharacterSheet({
           {c.abilityIds.map((id) => {
             const a = ABILITIES[id];
             if (!a) return null;
+            const sk = c.skill[id] ?? { uses: 0, rank: 1 };
+            const prevT = sk.rank > 1 ? MASTERY_THRESHOLDS[sk.rank - 2] : 0;
+            const nextT = sk.rank < MAX_RANK ? MASTERY_THRESHOLDS[sk.rank - 1] : sk.uses;
+            const pct = sk.rank >= MAX_RANK ? 100 : Math.min(100, ((sk.uses - prevT) / (nextT - prevT)) * 100);
             return (
               <div key={id} className="rune-panel !p-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-display text-sm text-parchment-100">{a.name}</span>
-                  <span className="text-[10px] text-arcane-400">{a.mpCost} Weave</span>
+                  <span className="font-display text-sm text-parchment-100">
+                    {a.name} <span className="text-[10px] text-gold-300">{"★".repeat(sk.rank)}{"☆".repeat(MAX_RANK - sk.rank)}</span>
+                  </span>
+                  <span className="text-[10px] text-arcane-400">{a.mpCost} Weave{a.dayCooldown ? " · 1/day" : ""}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-parchment-300/70">{a.desc}</p>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <div className="bar-track !h-1.5"><div className="h-full rounded-full bg-gradient-to-r from-gold-500 to-gold-300" style={{ width: `${pct}%` }} /></div>
+                  <span className="shrink-0 text-[9px] text-parchment-300/50">{sk.rank >= MAX_RANK ? "MAX" : `Rank ${sk.rank}`}</span>
+                </div>
               </div>
             );
           })}

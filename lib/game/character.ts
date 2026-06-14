@@ -56,6 +56,33 @@ export function equippedMods(char: Character, gear: ItemInstance[]): EquipMods {
 export function effAbility(char: Character, gear: ItemInstance[], key: AbilityKey): number {
   return char.abilities[key] + (equippedMods(char, gear).abilities[key] ?? 0);
 }
+
+// ── Use-based skill mastery ──
+
+export const MASTERY_THRESHOLDS = [5, 12, 22, 35]; // uses needed for ranks 2-5
+export const MAX_RANK = 5;
+
+export function rankFromUses(uses: number): number {
+  return 1 + MASTERY_THRESHOLDS.filter((t) => uses >= t).length;
+}
+export function skillRank(char: Character, id: string): number {
+  return char.skill[id]?.rank ?? 1;
+}
+// Returns the (small) bonus a rank grants to an ability/weapon's amounts.
+export function rankBonus(char: Character, id: string): number {
+  return skillRank(char, id) - 1; // 0..4
+}
+// Record one use; returns the new rank if it just ranked up, else 0.
+export function bumpSkill(char: Character, id: string): number {
+  const s = (char.skill[id] ??= { uses: 0, rank: 1 });
+  s.uses += 1;
+  const newRank = rankFromUses(s.uses);
+  if (newRank > s.rank) {
+    s.rank = newRank;
+    return newRank;
+  }
+  return 0;
+}
 export function effectiveMaxHp(char: Character, gear: ItemInstance[]): number {
   return Math.max(1, char.maxHp + equippedMods(char, gear).maxHp);
 }
@@ -136,6 +163,9 @@ export function createCharacter(opts: {
   const abilityIds = [...def.startingAbilities];
   if (sub && !abilityIds.includes(sub.grantsAbility)) abilityIds.push(sub.grantsAbility);
 
+  const skill: Character["skill"] = { _weapon: { uses: 0, rank: 1 } };
+  for (const id of abilityIds) skill[id] = { uses: 0, rank: 1 };
+
   // Equipment slots start empty; newGame creates starting weapon/armor instances
   // in the shared gear pool and assigns their uids here.
   return {
@@ -152,6 +182,7 @@ export function createCharacter(opts: {
     maxMp,
     equipment: { weapon: null, armor: null, ring1: null, ring2: null, amulet: null },
     abilityIds,
+    skill,
     downed: false,
     createdAt: Date.now(),
   };
@@ -249,16 +280,16 @@ export interface LevelUpResult {
 
 // Abilities unlocked as the hero grows, by class.
 const PROGRESSION: Record<ClassId, Record<number, string>> = {
-  warrior: { 3: "rally" },
-  mage: { 3: "frost_nova", 5: "mend" },
-  rogue: { 3: "smoke_bomb" },
-  cleric: { 3: "bless", 5: "smite" },
-  ranger: { 3: "hunters_mark", 5: "aimed_shot" },
-  bard: { 3: "mend", 5: "guiding_bolt" },
-  paladin: { 3: "rally", 5: "smite" },
-  druid: { 3: "frost_nova", 5: "mend" },
-  monk: { 3: "stunning_strike", 5: "smoke_bomb" },
-  necromancer: { 3: "bone_armor", 5: "raise_fallen" },
+  warrior: { 3: "rally", 5: "reckless_blow", 7: "shield_wall" },
+  mage: { 3: "frost_nova", 5: "mend", 7: "arcane_surge" },
+  rogue: { 3: "smoke_bomb", 5: "venom_strike", 7: "backstab" },
+  cleric: { 3: "bless", 5: "smite", 7: "holy_nova" },
+  ranger: { 3: "hunters_mark", 5: "aimed_shot", 7: "volley" },
+  bard: { 3: "mend", 5: "guiding_bolt", 7: "inspire" },
+  paladin: { 3: "rally", 5: "smite", 7: "guiding_bolt" },
+  druid: { 3: "frost_nova", 5: "mend", 7: "thorn_lash" },
+  monk: { 3: "stunning_strike", 5: "smoke_bomb", 7: "flurry" },
+  necromancer: { 3: "bone_armor", 5: "raise_fallen", 7: "corpse_blast" },
 };
 
 export function grantXp(char: Character, amount: number, hasLumen = false, gear: ItemInstance[] = []): LevelUpResult {

@@ -133,6 +133,8 @@ export interface Character {
   subclass: string;
   equipment: EquipSlots; // slot -> ItemInstance uid (into GameState.gear)
   abilityIds: string[];
+  // Use-based skill mastery: abilityId (or "_weapon") -> uses + rank (1-5).
+  skill: Record<string, { uses: number; rank: number }>;
   downed: boolean; // knocked out during the current battle
   createdAt: number;
 }
