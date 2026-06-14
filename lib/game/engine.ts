@@ -1,6 +1,6 @@
 import type { GameState, Character, AbilityKey } from "./types";
 import type { SceneContext } from "./scene";
-import { getScene, START_SCENE } from "./story";
+import { getScene, getCampaign, AI_ITEM_UNION, AI_ENEMY_UNION } from "./campaigns";
 import { spawnEnemy } from "./enemies";
 import {
   addToInventory,
@@ -18,16 +18,17 @@ import {
   playerFlee,
 } from "./combat";
 import type { AiAction, AiEffect } from "./dm";
-import { AI_ITEM_ALLOW, AI_ENEMY_ALLOW } from "./dm";
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
-export function newGame(character: Character): GameState {
+export function newGame(character: Character, campaignId = "shattered"): GameState {
+  const campaign = getCampaign(campaignId);
   const state: GameState = {
     version: SAVE_VERSION,
+    campaignId: campaign.id,
     phase: "exploring",
     character,
-    sceneId: START_SCENE,
+    sceneId: campaign.startScene,
     visited: [],
     flags: {},
     log: [],
@@ -35,7 +36,7 @@ export function newGame(character: Character): GameState {
     pendingChoiceLock: false,
   };
   addLog(state, "system", `${character.name}'s legend begins.`);
-  enterScene(state, START_SCENE);
+  enterScene(state, campaign.startScene);
   return state;
 }
 
@@ -276,7 +277,7 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
       }
     } else if (eff.type === "item") {
       const id = (eff as { id?: string }).id ?? "";
-      if ((AI_ITEM_ALLOW as readonly string[]).includes(id)) {
+      if (AI_ITEM_UNION.includes(id)) {
         addToInventory(state.character.inventory, id, 1);
         addLog(state, "loot", `Found: ${ITEMS[id].name}.`);
       }
@@ -284,7 +285,7 @@ export function applyAiAction(prev: GameState, action: AiAction): GameState {
       const ids = Array.isArray((eff as { enemies?: string[] }).enemies)
         ? (eff as { enemies: string[] }).enemies
         : [];
-      const valid = ids.filter((e) => (AI_ENEMY_ALLOW as readonly string[]).includes(e)).slice(0, 2);
+      const valid = ids.filter((e) => AI_ENEMY_UNION.includes(e)).slice(0, 2);
       if (valid.length) {
         const sc = Math.max(0, state.character.level - 1);
         state.combat = {

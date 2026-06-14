@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GameState } from "@/lib/game/types";
-import { getScene } from "@/lib/game/story";
+import { getScene } from "@/lib/game/campaigns";
 import {
   chooseOption,
   combatAttack,
@@ -204,9 +204,7 @@ export default function PlayPage() {
           <div className="rune-card text-center">
             <h2 className="font-display text-2xl text-gold-400">Victory</h2>
             <p className="mt-2 text-parchment-200/80">
-              {state.flags.ending === "king"
-                ? "You sit the remade throne. The realm is yours."
-                : "The realm is whole again, and you are its quiet legend."}
+              Your story is complete. The final words are written above.
             </p>
             <div className="mt-4 flex justify-center gap-3">
               <button className="gold-btn" onClick={() => router.push("/create")}>

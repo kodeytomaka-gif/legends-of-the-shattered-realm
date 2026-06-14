@@ -556,14 +556,5 @@ const SCENE_LIST: Scene[] = [
   },
 ];
 
-export const SCENES: Record<string, Scene> = Object.fromEntries(
-  SCENE_LIST.map((s) => [s.id, s])
-);
-
-export function getScene(id: string): Scene {
-  const scene = SCENES[id];
-  if (!scene) throw new Error(`Unknown scene: ${id}`);
-  return scene;
-}
-
-export const START_SCENE = "intro";
+export const SHATTERED_SCENES: Scene[] = SCENE_LIST;
+export const SHATTERED_START = "intro";

@@ -148,6 +148,7 @@ export interface CombatState {
 
 export interface GameState {
   version: number;
+  campaignId: string;
   phase: Phase;
   character: Character;
   sceneId: string;

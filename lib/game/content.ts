@@ -137,6 +137,25 @@ export const ITEMS: Record<string, ItemDef> = {
   iron_key: { id: "iron_key", name: "Iron Key", kind: "key", desc: "Cold, heavy, and clearly important.", value: 0 },
   lumen_charm: { id: "lumen_charm", name: "Lumen Charm", kind: "trinket", desc: "A warm light that steadies the heart. +1 max HP per level when carried.", value: 40 },
   aethyr_shard: { id: "aethyr_shard", name: "Shard of Aethyr", kind: "shard", desc: "A fragment of the world's broken heart. Gather them all.", value: 0 },
+
+  // ── The Dungeon Crawl (game-show dungeon) ──
+  // Weapons
+  foam_bat: { id: "foam_bat", name: "Foam Cosplay Bat", kind: "weapon", desc: "Technically a weapon. The crowd loves it.", damage: [1, 6], damageBonus: 0, value: 6 },
+  riot_baton: { id: "riot_baton", name: "Confiscated Riot Baton", kind: "weapon", desc: "Standard-issue crowd persuasion.", damage: [1, 8], damageBonus: 1, value: 18 },
+  nail_bat: { id: "nail_bat", name: "Bat With Nails In It", kind: "weapon", desc: "Someone's pride and joy. Now yours.", damage: [1, 10], damageBonus: 1, value: 26 },
+  railgun_pistol: { id: "railgun_pistol", name: "Sponsored Railgun Pistol", kind: "weapon", desc: "Fires a slug at an unreasonable speed. Ad plays on reload.", damage: [2, 6], damageBonus: 2, value: 120 },
+  // Armor
+  hazmat_suit: { id: "hazmat_suit", name: "Hazmat Onesie", kind: "armor", desc: "Crinkly, hot, and weirdly protective.", ac: 2, value: 16 },
+  kevlar_vest: { id: "kevlar_vest", name: "Kevlar Vest", kind: "armor", desc: "Looted from a former SWAT enthusiast.", ac: 4, value: 35 },
+  power_armor: { id: "power_armor", name: "Knockoff Power Armor", kind: "armor", desc: "Servos whine; the brand decal is peeling.", ac: 6, value: 90 },
+  // Consumables
+  energy_drink: { id: "energy_drink", name: "Sponsor's Energy Drink", kind: "potion", desc: "Restores 12 HP. Tastes like blue.", heal: 12, value: 12, stackable: true },
+  stim_pack: { id: "stim_pack", name: "Battlefield Stim-Pack", kind: "potion", desc: "Restores 30 HP. Do not exceed one. (You will.)", heal: 30, value: 30, stackable: true },
+  nano_serum: { id: "nano_serum", name: "Nootropic Nano-Serum", kind: "potion", desc: "Restores 12 Weave/mana. Side effects: clarity.", restoreMp: 12, value: 15, stackable: true },
+  // Trinkets / quest
+  keycard: { id: "keycard", name: "Maintenance Keycard", kind: "key", desc: "Opens doors that the System forgot to lock.", value: 0 },
+  loot_token: { id: "loot_token", name: "Bronze Loot Token", kind: "trinket", desc: "Redeemable at any Black Market terminal.", value: 10, stackable: true },
+  sponsor_pin: { id: "sponsor_pin", name: "Sponsor Pin", kind: "trinket", desc: "A flair of corporate favor. The crowd notices you more.", value: 40 },
 };
 
 // ── Abilities ──

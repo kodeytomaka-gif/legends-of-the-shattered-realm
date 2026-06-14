@@ -28,6 +28,7 @@ interface Env {
 
 interface DmRequest {
   mode?: "embellish" | "ask" | "act";
+  persona?: string;
   hero?: string;
   scene?: string;
   region?: string;
@@ -38,7 +39,7 @@ interface DmRequest {
   allowedEnemies?: string[];
 }
 
-const BASE = `You are the Dungeon Master for "Legends of the Shattered Realm", a dark-fantasy RPG.
+const DEFAULT_PERSONA = `You are the Dungeon Master for "Legends of the Shattered Realm", a dark-fantasy RPG.
 The world was broken by the Sundering; the hero seeks the three Shards of Aethyr to mend or claim it.
 Voice: evocative, second person ("you"), present tense, grounded high-fantasy.`;
 
@@ -77,14 +78,15 @@ async function handleDm(request: Request, env: Env): Promise<Response> {
   if (!env.AI) return json({ text: "" });
 
   const context = buildContext(req);
-  let system = `${BASE}\n${PROSE_RULES}`;
+  const base = (req.persona ?? "").trim() || DEFAULT_PERSONA;
+  let system = `${base}\n${PROSE_RULES}`;
   let userContent: string;
   let maxTokens = 160;
 
   if (req.mode === "act") {
     const items = (req.allowedItems ?? []).join(", ") || "(none)";
     const enemies = (req.allowedEnemies ?? []).join(", ") || "(none)";
-    system = `${BASE}
+    system = `${base}
 You adjudicate a free-form player action and reply with STRICT JSON only — no prose, no markdown, no code fences.
 Schema: {"narration": string, "effects": Effect[]}
 Each Effect is one of:

@@ -26,9 +26,11 @@ import {
 import { abilityMod, modString } from "@/lib/game/dice";
 import { newGame } from "@/lib/game/engine";
 import { saveGame } from "@/lib/game/save";
+import { CAMPAIGNS } from "@/lib/game/campaigns";
 
 export default function CreatePage() {
   const router = useRouter();
+  const [campaignId, setCampaignId] = useState(CAMPAIGNS[0].id);
   const [name, setName] = useState("");
   const [race, setRace] = useState<RaceId>("human");
   const [klass, setKlass] = useState<ClassId>("warrior");
@@ -59,7 +61,7 @@ export default function CreatePage() {
       klass,
       abilities: scores,
     });
-    const game = newGame(character);
+    const game = newGame(character, campaignId);
     saveGame(game);
     router.push("/play");
   }
@@ -73,6 +75,34 @@ export default function CreatePage() {
         <h1 className="font-display text-3xl text-gold-400 sm:text-4xl">Forge Your Hero</h1>
         <div className="w-20" />
       </div>
+
+      {/* Adventure */}
+      <section className="rune-card mb-6">
+        <h2 className="mb-4 font-display text-xl text-gold-400">Choose Your Adventure</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          {CAMPAIGNS.map((c) => {
+            const selected = campaignId === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setCampaignId(c.id)}
+                className={`rounded-md border px-4 py-3 text-left transition ${
+                  selected
+                    ? "border-gold-400 bg-ink-600/60 shadow-glow"
+                    : "border-gold-400/20 bg-ink-700/40 hover:border-gold-400/50"
+                }`}
+              >
+                <div className="font-display text-parchment-100">{c.title}</div>
+                <div className="mt-0.5 text-xs uppercase tracking-wider text-gold-400/70">{c.tagline}</div>
+                <p className="mt-1.5 text-sm text-parchment-200/70">{c.blurb}</p>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs text-parchment-300/50">
+          Both adventures share the same hero system — your lineage, calling, and abilities carry over.
+        </p>
+      </section>
 
       {/* Name */}
       <section className="rune-card mb-6">

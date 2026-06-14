@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { hasSave, loadGame, clearSave, loadSettings, saveSettings } from "@/lib/game/save";
 import { RACES, CLASSES } from "@/lib/game/content";
+import { getCampaign } from "@/lib/game/campaigns";
 
 export default function HomePage() {
   const router = useRouter();
@@ -19,7 +20,9 @@ export default function HomePage() {
       const g = loadGame();
       if (g) {
         const c = g.character;
-        setSummary(`${c.name} — Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name} · ${c.shards}/3 Shards`);
+        const camp = getCampaign(g.campaignId);
+        const progress = g.campaignId === "shattered" ? ` · ${c.shards}/3 Shards` : "";
+        setSummary(`${c.name} — Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.klass].name}${progress} · ${camp.title}`);
       }
     }
     setAiDm(loadSettings().aiDm);

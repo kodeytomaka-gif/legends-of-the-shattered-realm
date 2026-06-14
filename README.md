@@ -18,6 +18,12 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+- **Choose an adventure** — two campaigns share the same hero system:
+  - **Legends of the Shattered Realm** — dark fantasy; gather three Shards of
+    Aethyr and decide whether to mend the world or rule it.
+  - **The Dungeon Crawl** — a snarky-AI LitRPG game-show dungeon (original
+    homage to the genre): descend monetized floors, crack loot boxes, win the
+    crowd, and outlive the host.
 - **Forge Your Hero** — pick a lineage (Human, Elf, Dwarf, Orc, Halfling) and a
   calling (Warrior, Mage, Rogue, Cleric, Ranger), then spend points across the
   six abilities.

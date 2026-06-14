@@ -1,23 +1,10 @@
 import type { GameState } from "./types";
 import { RACES, CLASSES } from "./content";
-import { getScene } from "./story";
+import { getScene, getCampaign } from "./campaigns";
 
-// Client helper for the AI Dungeon Master (Cloudflare Pages Function).
+// Client helper for the AI Dungeon Master (Cloudflare Worker endpoint).
 // Everything here degrades gracefully: if the endpoint is missing or errors,
 // callers get `null`/empty and the game's built-in narration stands on its own.
-
-// Guardrails: the only things the AI is allowed to hand out or throw at the
-// player through free-form actions. The engine re-validates these server-of-truth
-// side before applying anything.
-export const AI_ITEM_ALLOW = [
-  "potion_minor",
-  "potion_mana",
-  "rusted_axe",
-  "lockpicks",
-  "lumen_charm",
-] as const;
-
-export const AI_ENEMY_ALLOW = ["wolf", "goblin", "bandit", "skeleton"] as const;
 
 export type AiEffect =
   | { type: "none" }
@@ -67,6 +54,7 @@ export async function embellishScene(s: GameState): Promise<string | null> {
   const scene = getScene(s.sceneId);
   return callDm({
     mode: "embellish",
+    persona: getCampaign(s.campaignId).persona,
     hero: heroSummary(s),
     scene: scene.title,
     region: scene.region ?? "",
@@ -79,6 +67,7 @@ export async function askDm(s: GameState, question: string): Promise<string | nu
   const scene = getScene(s.sceneId);
   return callDm({
     mode: "ask",
+    persona: getCampaign(s.campaignId).persona,
     hero: heroSummary(s),
     scene: scene.title,
     region: scene.region ?? "",
@@ -116,15 +105,17 @@ function extractJson(text: string): string | null {
 // the endpoint is unavailable.
 export async function actDm(s: GameState, action: string): Promise<AiAction | null> {
   const scene = getScene(s.sceneId);
+  const campaign = getCampaign(s.campaignId);
   const raw = await callDm({
     mode: "act",
+    persona: campaign.persona,
     hero: heroSummary(s),
     scene: scene.title,
     region: scene.region ?? "",
     recent: recentNarration(s, 6),
     action,
-    allowedItems: [...AI_ITEM_ALLOW],
-    allowedEnemies: [...AI_ENEMY_ALLOW],
+    allowedItems: campaign.aiItems,
+    allowedEnemies: campaign.aiEnemies,
   });
   if (raw === null) return null;
 
