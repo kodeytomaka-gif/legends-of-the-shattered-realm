@@ -1,0 +1,14 @@
+# Cloudflare Pages configuration for Legends of the Shattered Realm.
+#
+# Deploy with:   npm run build && npx wrangler pages deploy out
+# or connect this repo in the Cloudflare dashboard with:
+#   Build command:  npm run build
+#   Output dir:     out
+name = "legends-of-the-shattered-realm"
+compatibility_date = "2025-01-15"
+pages_build_output_dir = "out"
+
+# Workers AI binding — powers the optional AI Dungeon Master (/api/dm).
+# Remove this block to run the game with built-in narration only.
+[ai]
+binding = "AI"
